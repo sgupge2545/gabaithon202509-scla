@@ -11,5 +11,16 @@ services:
     working_dir: /app
     volumes:
       - .:/app
-      - /app/node_modules
-      - /app/client/node_modules
+      # Node.jsキャッシュボリューム（リビルド時の高速化）
+      - node_modules_cache:/app/client/node_modules
+      - node_modules_root_cache:/app/node_modules
+      # Pipキャッシュボリューム
+      - pip_cache:/root/.cache/pip
+      # SQLiteデータベースファイルのみ永続化
+      - sqlite_data:/app/data
+
+volumes:
+  node_modules_cache:
+  node_modules_root_cache:
+  pip_cache:
+  sqlite_data:

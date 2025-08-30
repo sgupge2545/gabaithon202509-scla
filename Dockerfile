@@ -2,7 +2,7 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# 開発に必要なツールをインストール
+# システムパッケージを先にインストール（キャッシュ効率化）
 RUN apt-get update && apt-get install -y \
     git \
     curl \
@@ -15,17 +15,18 @@ RUN apt-get update && apt-get install -y \
     && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
 
-# npmは既にNode.jsに含まれているため、追加インストール不要
-
-# Pythonの依存関係をインストール
+# Pythonの依存関係を先にインストール（変更頻度が低いため）
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# フロントエンドの依存関係をインストール
-COPY client/package.json ./client/
-RUN cd client && npm install
+# Node.jsの依存関係をインストール（package.jsonとpackage-lock.jsonのみコピー）
+COPY client/package*.json ./client/
+RUN cd client && npm ci --only=production=false
 
-# アプリケーションファイルをコピー
+# 開発用の追加設定（必要に応じて）
+RUN cd client && npm cache clean --force
+
+# アプリケーションコードをコピー（最後に行うことで上記のキャッシュが有効活用される）
 COPY . .
 
 EXPOSE 8000 3000
