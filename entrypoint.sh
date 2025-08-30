@@ -7,7 +7,7 @@ uvicorn server.main:app --host 0.0.0.0 --port 8000 --reload &
 # クライアントディレクトリに移動してNext.jsを起動
 echo "Starting Next.js server..."
 cd client
-pnpm dev &
+npm run dev &
 
 # 両方のプロセスを待機
 wait

@@ -26,6 +26,7 @@ router = APIRouter()
 
 CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
 CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
+FRONTEND_URL = os.getenv("FRONTEND_URL")
 
 oauth = OAuth()
 oauth.register(
@@ -41,11 +42,13 @@ oauth.register(
 
 @router.get("/login")
 async def login(request: Request):
+    request.session.clear()
     # 開発環境用のリダイレクトURI
     redirect_uri = str(request.base_url) + "api/auth/callback"
     return await oauth.google.authorize_redirect(
         request,
         redirect_uri,
+        prompt="select_account",
     )
 
 
@@ -70,12 +73,12 @@ async def auth_callback(request: Request, db: Session = Depends(get_db)):
     # セッションにユーザー情報を保存
     request.session["user"] = {
         "id": db_user.id,
-        "sub": userinfo["sub"],
-        "email": userinfo.get("email"),
-        "name": userinfo.get("name"),
-        "picture": userinfo.get("picture"),
+        "idp_id": db_user.idp_id,
+        "email": db_user.email,
+        "name": db_user.name,
+        "picture_url": db_user.picture_url,
     }
-    return RedirectResponse(url="/api/auth/me")
+    return RedirectResponse(url=FRONTEND_URL)
 
 
 @router.get("/me", response_model=UserResponse)
@@ -83,7 +86,17 @@ async def me(request: Request):
     user = request.session.get("user")
     if not user:
         return RedirectResponse(url="/api/auth/login")
-    return user
+
+    if "idp_id" in user:
+        return UserResponse(
+            id=user["id"],
+            sub=user["idp_id"],
+            email=user["email"],
+            name=user["name"],
+            picture=user["picture_url"],
+        )
+    else:
+        return UserResponse(**user)
 
 
 @router.post("/logout", response_model=LogoutResponse)

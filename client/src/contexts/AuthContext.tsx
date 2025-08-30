@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useEffect, useState } from "react";
-import { authApi } from "@/api/client";
+import { useAuthApi } from "@/hooks/useAuthApi";
 import { User } from "@/types";
 
 interface AuthContextType {
@@ -29,13 +29,14 @@ interface AuthProviderProps {
 export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const { login: loginApi, logout: logoutApi, getCurrentUser } = useAuthApi();
 
   const login = () => {
-    authApi.login();
+    loginApi();
   };
 
   const logout = async () => {
-    const { error } = await authApi.logout();
+    const { error } = await logoutApi();
     if (!error) {
       setUser(null);
     } else {
@@ -44,7 +45,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   };
 
   const refreshUser = async () => {
-    const { data, error } = await authApi.getCurrentUser();
+    const { data, error } = await getCurrentUser();
 
     if (data) {
       // 生成型からクライアント型に変換
@@ -56,8 +57,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
         picture: data.picture || undefined,
       };
       setUser(user);
-    } else if (error) {
-      console.error("ユーザー情報取得エラー:", error);
+    } else {
+      // 未認証は正常な状態なのでエラーログを出さない
       setUser(null);
     }
 
