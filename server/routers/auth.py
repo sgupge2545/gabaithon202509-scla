@@ -2,10 +2,25 @@ import os
 
 from authlib.integrations.starlette_client import OAuth
 from fastapi import APIRouter, Depends, Request
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import RedirectResponse
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from ..database import get_db, user_service
+
+
+# レスポンスモデル定義
+class UserResponse(BaseModel):
+    id: str
+    sub: str
+    email: str
+    name: str
+    picture: str | None = None
+
+
+class LogoutResponse(BaseModel):
+    ok: bool
+
 
 router = APIRouter()
 
@@ -63,15 +78,15 @@ async def auth_callback(request: Request, db: Session = Depends(get_db)):
     return RedirectResponse(url="/api/auth/me")
 
 
-@router.get("/me")
+@router.get("/me", response_model=UserResponse)
 async def me(request: Request):
     user = request.session.get("user")
     if not user:
         return RedirectResponse(url="/api/auth/login")
-    return JSONResponse(user)
+    return user
 
 
-@router.post("/logout")
+@router.post("/logout", response_model=LogoutResponse)
 async def logout(request: Request):
     request.session.clear()
-    return JSONResponse({"ok": True})
+    return {"ok": True}

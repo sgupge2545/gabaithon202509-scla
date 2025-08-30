@@ -7,7 +7,13 @@ from starlette.middleware.sessions import SessionMiddleware
 from .database import Base, engine
 from .routers import auth
 
-app = FastAPI()
+app = FastAPI(
+    title="チャットアプリ API",
+    description="リアルタイムチャットアプリケーションのAPI",
+    version="1.0.0",
+    docs_url="/docs",  # Swagger UI
+    redoc_url="/redoc",  # ReDoc
+)
 
 # データベーステーブルを作成
 Base.metadata.create_all(bind=engine)
@@ -41,6 +47,12 @@ def read_root():
 @api_router.get("/hello")
 def read_hello():
     return {"message": "Hello from API!"}
+
+
+@api_router.get("/openapi.json")
+def get_openapi():
+    """OpenAPI スキーマを取得"""
+    return app.openapi()
 
 
 # ルーターを登録（/apiプレフィックス付き）
