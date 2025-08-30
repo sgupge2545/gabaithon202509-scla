@@ -13,16 +13,15 @@ RUN apt-get update && apt-get install -y \
     && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
 
-# pnpmをインストール
-RUN npm install -g pnpm
+# npmは既にNode.jsに含まれているため、追加インストール不要
 
 # Pythonの依存関係をインストール
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # フロントエンドの依存関係をインストール
-COPY client/package.json client/pnpm-lock.yaml ./client/
-RUN cd client && pnpm install --frozen-lockfile
+COPY client/package.json ./client/
+RUN cd client && npm install
 
 # アプリケーションファイルをコピー
 COPY . .
@@ -30,4 +29,4 @@ COPY . .
 EXPOSE 8000 3000
 
 # 両方のサーバーを同時起動
-CMD ["sh", "-c", "uvicorn server.main:app --host 0.0.0.0 --port 8000 --reload & cd client && pnpm dev & wait"] 
+CMD ["sh", "-c", "uvicorn server.main:app --host 0.0.0.0 --port 8000 --reload & cd client && npm run dev & wait"] 
