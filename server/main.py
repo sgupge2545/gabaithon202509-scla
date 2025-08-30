@@ -1,11 +1,21 @@
 import os
 
-from fastapi import FastAPI
+from fastapi import APIRouter, FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
 from .routers import auth
 
 app = FastAPI()
+
+# CORSミドルウェアを追加（開発用）
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],  # フロントエンドのオリジンを許可
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # セッションミドルウェアを追加
 SECRET_KEY = os.getenv("SESSION_SECRET", "dev-secret-change-me")
@@ -14,10 +24,21 @@ app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY, https_only=False)
 # OAuthオブジェクトをアプリケーションに登録
 app.state.oauth = auth.oauth
 
-# ルーターを登録
-app.include_router(auth.router, prefix="/auth", tags=["auth"])
+# APIルーターを作成
+api_router = APIRouter()
 
 
-@app.get("/")
+# APIエンドポイントを定義
+@api_router.get("/")
 def read_root():
     return {"message": "Hello World"}
+
+
+@api_router.get("/hello")
+def read_hello():
+    return {"message": "Hello from API!"}
+
+
+# ルーターを登録（/apiプレフィックス付き）
+app.include_router(api_router, prefix="/api", tags=["api"])
+app.include_router(auth.router, prefix="/api/auth", tags=["auth"])

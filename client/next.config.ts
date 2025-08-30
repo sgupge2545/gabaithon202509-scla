@@ -13,6 +13,18 @@ const nextConfig: NextConfig = {
     }
     return config;
   },
+  // API プロキシ設定
+  async rewrites() {
+    if (process.env.NODE_ENV === "development") {
+      return [
+        {
+          source: "/api/:path*",
+          destination: "http://localhost:8000/api/:path*", // 開発時はlocalhost:8000/api/に転送
+        },
+      ];
+    }
+    return [];
+  },
 };
 
 export default nextConfig;
