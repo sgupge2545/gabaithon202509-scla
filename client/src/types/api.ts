@@ -8,6 +8,7 @@ import type { components, operations } from "./generated";
 // === レスポンス型 ===
 export type UserResponse = components["schemas"]["UserResponse"];
 export type LogoutResponse = components["schemas"]["LogoutResponse"];
+export type RoomResponse = components["schemas"]["RoomResponse"];
 
 // === エラー型 ===
 export interface ErrorResponse {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useAuth } from "@/contexts/AuthContext";
+import { RoomList } from "@/components/RoomList";
 import Image from "next/image";
 
 export default function Home() {
@@ -35,29 +36,7 @@ export default function Home() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="text-center">
-          <h2 className="text-3xl font-bold text-gray-900 mb-4">
-            ようこそ、{user?.name}さん！
-          </h2>
-          <p className="text-lg text-gray-600 mb-8">
-            チャットアプリにログインしました
-          </p>
-
-          <div className="bg-white rounded-lg shadow-md p-6 max-w-md mx-auto">
-            <h3 className="text-xl font-semibold mb-4">ユーザー情報</h3>
-            <div className="space-y-2 text-left">
-              <p>
-                <strong>ID:</strong> {user?.id}
-              </p>
-              <p>
-                <strong>Email:</strong> {user?.email}
-              </p>
-              <p>
-                <strong>名前:</strong> {user?.name}
-              </p>
-            </div>
-          </div>
-        </div>
+        <RoomList />
       </main>
     </div>
   );

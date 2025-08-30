@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from sqlalchemy import CheckConstraint, Column, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import relationship
 
@@ -26,7 +28,9 @@ class Room(Base):
     visibility = Column(String, nullable=False, default="public")
     passcode_hash = Column(Text, nullable=True)
     capacity = Column(Integer, nullable=False, default=5)
-    created_at = Column(Text, nullable=False, default="datetime('now')")
+    created_at = Column(
+        Text, nullable=False, default=lambda: datetime.now().isoformat()
+    )
 
     # 制約
     __table_args__ = (
@@ -50,7 +54,7 @@ class RoomMember(Base):
     user_id = Column(
         String, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
     )
-    joined_at = Column(Text, nullable=False, default="datetime('now')")
+    joined_at = Column(Text, nullable=False, default=lambda: datetime.now().isoformat())
 
     # リレーション
     room = relationship("Room", back_populates="members")
@@ -71,7 +75,9 @@ class Message(Base):
     room_id = Column(String, ForeignKey("rooms.id", ondelete="CASCADE"), nullable=False)
     user_id = Column(String, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     content = Column(Text, nullable=False)
-    created_at = Column(Text, nullable=False, default="datetime('now')")
+    created_at = Column(
+        Text, nullable=False, default=lambda: datetime.now().isoformat()
+    )
 
     # リレーション
     room = relationship("Room", back_populates="messages")
