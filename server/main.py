@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
 from .database import Base, engine
-from .routers import auth, rooms
+from .routers import auth, messages, rooms
 
 app = FastAPI(
     title="チャットアプリ API",
@@ -59,3 +59,4 @@ def get_openapi():
 app.include_router(api_router, prefix="/api", tags=["api"])
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(rooms.router, prefix="/api/rooms", tags=["rooms"])
+app.include_router(messages.router, prefix="/api/rooms", tags=["messages"])

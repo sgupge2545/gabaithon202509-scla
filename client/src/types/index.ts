@@ -2,11 +2,8 @@
  * 型定義の統一エクスポート
  */
 
-// クライアント型
+// 各ドメインの型
 export * from "./user";
-
-// API型
-export * from "./api";
-
-// 生成型は直接エクスポートしない（api.ts 経由で使用）
-// export * from "./generated";
+export * from "./room";
+export * from "./message";
+export * from "./common";

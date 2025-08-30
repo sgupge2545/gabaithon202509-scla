@@ -1,11 +1,14 @@
 "use client";
 
 import { useAuth } from "@/contexts/AuthContext";
+import { useRoom } from "@/contexts/RoomContext";
 import { RoomList } from "@/components/RoomList";
+import { ChatRoom } from "@/components/ChatRoom";
 import Image from "next/image";
 
 export default function Home() {
   const { user, logout } = useAuth();
+  const { selectedRoom, clearSelectedRoom } = useRoom();
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
@@ -36,7 +39,11 @@ export default function Home() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <RoomList />
+        {selectedRoom ? (
+          <ChatRoom room={selectedRoom} onBack={clearSelectedRoom} />
+        ) : (
+          <RoomList />
+        )}
       </main>
     </div>
   );

@@ -25,7 +25,7 @@ import { useRoom } from "@/contexts/RoomContext";
 import { Room, CreateRoomData } from "@/types/room";
 
 export function RoomList() {
-  const { publicRooms, loading, createRoom, joinRoom } = useRoom();
+  const { publicRooms, loading, createRoom, joinRoom, selectRoom } = useRoom();
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [joinDialogOpen, setJoinDialogOpen] = useState(false);
   const [selectedRoomId, setSelectedRoomId] = useState<string>("");
@@ -55,21 +55,25 @@ export function RoomList() {
     }
   };
 
-  const handleJoinRoom = async (
-    roomId: string,
-    needsPasscode: boolean = false
-  ) => {
+  const handleJoinRoom = async (room: Room, needsPasscode: boolean = false) => {
     if (needsPasscode) {
-      setSelectedRoomId(roomId);
+      setSelectedRoomId(room.id);
       setJoinDialogOpen(true);
     } else {
-      await joinRoom(roomId);
+      const success = await joinRoom(room.id);
+      if (success) {
+        selectRoom(room);
+      }
     }
   };
 
   const handleJoinWithPasscode = async () => {
     const success = await joinRoom(selectedRoomId, { passcode });
     if (success) {
+      const room = publicRooms.find((r) => r.id === selectedRoomId);
+      if (room) {
+        selectRoom(room);
+      }
       setJoinDialogOpen(false);
       setPasscode("");
       setSelectedRoomId("");
@@ -128,7 +132,7 @@ export function RoomList() {
                 <Button
                   variant="outlined"
                   onClick={() =>
-                    handleJoinRoom(room.id, room.visibility === "passcode")
+                    handleJoinRoom(room, room.visibility === "passcode")
                   }
                   disabled={room.member_count >= room.capacity}
                 >

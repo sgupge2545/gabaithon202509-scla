@@ -8,6 +8,7 @@ interface RoomContextType {
   // 状態
   publicRooms: Room[];
   currentRoom: RoomDetail | null;
+  selectedRoom: Room | null;
   loading: boolean;
 
   // アクション
@@ -17,6 +18,8 @@ interface RoomContextType {
   leaveRoom: (roomId: string) => Promise<boolean>;
   setCurrentRoom: (roomId: string) => Promise<void>;
   clearCurrentRoom: () => void;
+  selectRoom: (room: Room) => void;
+  clearSelectedRoom: () => void;
 }
 
 const RoomContext = createContext<RoomContextType | undefined>(undefined);
@@ -36,6 +39,7 @@ interface RoomProviderProps {
 export function RoomProvider({ children }: RoomProviderProps) {
   const [publicRooms, setPublicRooms] = useState<Room[]>([]);
   const [currentRoom, setCurrentRoomState] = useState<RoomDetail | null>(null);
+  const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
   const [loading, setLoading] = useState(false);
 
   const roomApi = useRoomApi();
@@ -112,6 +116,14 @@ export function RoomProvider({ children }: RoomProviderProps) {
     setCurrentRoomState(null);
   };
 
+  const selectRoom = (room: Room) => {
+    setSelectedRoom(room);
+  };
+
+  const clearSelectedRoom = () => {
+    setSelectedRoom(null);
+  };
+
   // 初期化時に公開ルーム一覧を取得
   useEffect(() => {
     fetchPublicRooms();
@@ -120,6 +132,7 @@ export function RoomProvider({ children }: RoomProviderProps) {
   const value = {
     publicRooms,
     currentRoom,
+    selectedRoom,
     loading,
     fetchPublicRooms,
     createRoom,
@@ -127,6 +140,8 @@ export function RoomProvider({ children }: RoomProviderProps) {
     leaveRoom,
     setCurrentRoom,
     clearCurrentRoom,
+    selectRoom,
+    clearSelectedRoom,
   };
 
   return <RoomContext.Provider value={value}>{children}</RoomContext.Provider>;

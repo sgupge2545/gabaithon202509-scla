@@ -1,8 +1,18 @@
 /**
  * クライアント側のルーム型定義
- * OpenAPI生成型とは別に、クライアントで扱うルーム情報を定義
  */
 
+// === API関連型 ===
+export interface RoomResponse {
+  id: string;
+  title: string;
+  visibility: string;
+  capacity: number;
+  member_count: number;
+  created_at: string;
+}
+
+// === クライアント用型 ===
 export interface Room {
   id: string;
   title: string;

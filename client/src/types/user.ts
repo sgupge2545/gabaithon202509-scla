@@ -1,8 +1,21 @@
 /**
  * クライアント側のユーザー型定義
- * OpenAPI生成型とは別に、クライアントで扱うユーザー情報を定義
  */
 
+// === API関連型 ===
+export interface UserResponse {
+  id: string;
+  sub: string;
+  email: string;
+  name: string;
+  picture?: string;
+}
+
+export interface LogoutResponse {
+  ok: boolean;
+}
+
+// === クライアント用型 ===
 export interface User {
   id: string;
   sub: string;
@@ -26,3 +39,7 @@ export interface UserProfileUpdate {
   name: string;
   picture?: string;
 }
+
+// === API操作の結果型 ===
+export type GetCurrentUserResponse = UserResponse;
+export type LogoutApiResponse = LogoutResponse;

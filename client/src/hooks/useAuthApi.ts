@@ -1,8 +1,7 @@
 "use client";
 
 import { useCallback } from "react";
-import type { User } from "@/types";
-import type { GetCurrentUserResponse, LogoutApiResponse } from "@/types";
+import { User, GetCurrentUserResponse, LogoutApiResponse } from "@/types/user";
 
 function mapUserFromApi(response: GetCurrentUserResponse): User {
   return {
