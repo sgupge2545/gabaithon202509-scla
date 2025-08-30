@@ -26,7 +26,8 @@ oauth.register(
 
 @router.get("/login")
 async def login(request: Request):
-    redirect_uri = request.url_for("auth_callback")
+    # 開発環境用のリダイレクトURI
+    redirect_uri = str(request.base_url) + "api/auth/callback"
     return await oauth.google.authorize_redirect(
         request,
         redirect_uri,
@@ -59,14 +60,14 @@ async def auth_callback(request: Request, db: Session = Depends(get_db)):
         "name": userinfo.get("name"),
         "picture": userinfo.get("picture"),
     }
-    return RedirectResponse(url="/auth/me")
+    return RedirectResponse(url="/api/auth/me")
 
 
 @router.get("/me")
 async def me(request: Request):
     user = request.session.get("user")
     if not user:
-        return RedirectResponse(url="/auth/login")
+        return RedirectResponse(url="/api/auth/login")
     return JSONResponse(user)
 
 
