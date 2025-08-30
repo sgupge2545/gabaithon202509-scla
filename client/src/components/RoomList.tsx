@@ -50,8 +50,11 @@ export function RoomList() {
         passcode: "",
         capacity: 5,
       });
-      // 作成したルームに自動参加
-      await joinRoom(room.id);
+      // 作成したルームに自動参加してチャット画面に移動
+      const joinSuccess = await joinRoom(room.id);
+      if (joinSuccess) {
+        selectRoom(room);
+      }
     }
   };
 
