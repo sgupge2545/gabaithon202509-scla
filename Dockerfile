@@ -29,8 +29,5 @@ COPY . .
 
 EXPOSE 8000 3000
 
-# エントリーポイントスクリプトに実行権限を付与
-RUN chmod +x entrypoint.sh
-
-# エントリーポイントを設定
-ENTRYPOINT ["./entrypoint.sh"] 
+# 両方のサーバーを同時起動
+CMD ["sh", "-c", "uvicorn server.main:app --host 0.0.0.0 --port 8000 --reload & cd client && pnpm dev & wait"] 

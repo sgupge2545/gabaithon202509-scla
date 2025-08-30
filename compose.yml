@@ -9,3 +9,7 @@ services:
     env_file:
       - .env
     working_dir: /app
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - /app/client/node_modules

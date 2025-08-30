@@ -18,20 +18,28 @@
     "vscode": {
       "extensions": [
         "ms-python.python",
-        "ms-python.flake8",
+        "charliermarsh.ruff",
         "bradlc.vscode-tailwindcss",
         "esbenp.prettier-vscode",
         "ms-vscode.vscode-typescript-next"
       ],
       "settings": {
         "python.defaultInterpreterPath": "/usr/local/bin/python",
-        "python.linting.enabled": true,
-        "python.linting.flake8Enabled": true,
-        "python.formatting.provider": "black",
+        "python.linting.enabled": false,
+        "python.formatting.provider": "none",
+        "[python]": {
+          "editor.defaultFormatter": "charliermarsh.ruff",
+          "editor.formatOnSave": true,
+          "editor.codeActionsOnSave": {
+            "source.organizeImports": "explicit"
+          }
+        },
+        "ruff.lint.enable": true,
+        "ruff.format.enable": true,
         "typescript.preferences.includePackageJsonAutoImports": "on"
       }
     }
   },
-  "postCreateCommand": "echo 'Development environment ready! Use Ctrl+Shift+` to open terminal and run ./start.sh to start both servers.'",
+  "postCreateCommand": "echo 'Development environment ready! FastAPI and Next.js servers will start automatically.'",
   "remoteUser": "root"
 }
