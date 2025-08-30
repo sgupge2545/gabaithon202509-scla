@@ -3,8 +3,7 @@ services:
     build: .
     ports:
       - "8000:8000"
-    volumes:
-      - .:/app
+      - "3000:3000"
     environment:
       - PYTHONPATH=/app
     env_file:

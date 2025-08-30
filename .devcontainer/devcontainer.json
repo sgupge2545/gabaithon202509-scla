@@ -1,29 +1,37 @@
 {
-  "name": "FastAPI Development",
+  "name": "FastAPI + Next.js Development",
   "dockerComposeFile": "../compose.yml",
   "service": "app",
   "workspaceFolder": "/app",
+  "forwardPorts": [8000, 3000],
+  "portsAttributes": {
+    "8000": {
+      "label": "FastAPI Backend",
+      "onAutoForward": "notify"
+    },
+    "3000": {
+      "label": "Next.js Frontend",
+      "onAutoForward": "notify"
+    }
+  },
   "customizations": {
     "vscode": {
       "extensions": [
         "ms-python.python",
-        "charliermarsh.ruff",
-        "ms-toolsai.jupyter",
-        "ms-vscode.vscode-json"
+        "ms-python.flake8",
+        "bradlc.vscode-tailwindcss",
+        "esbenp.prettier-vscode",
+        "ms-vscode.vscode-typescript-next"
       ],
       "settings": {
         "python.defaultInterpreterPath": "/usr/local/bin/python",
         "python.linting.enabled": true,
-        "python.linting.ruffEnabled": true,
-        "python.formatting.provider": "ruff",
-        "editor.formatOnSave": true,
-        "editor.codeActionsOnSave": {
-          "source.organizeImports": "explicit"
-        }
+        "python.linting.flake8Enabled": true,
+        "python.formatting.provider": "black",
+        "typescript.preferences.includePackageJsonAutoImports": "on"
       }
     }
   },
-  "forwardPorts": [8000],
-  "postCreateCommand": "pip install -r requirements.txt",
+  "postCreateCommand": "echo 'Development environment ready! Use Ctrl+Shift+` to open terminal and run ./start.sh to start both servers.'",
   "remoteUser": "root"
 }
