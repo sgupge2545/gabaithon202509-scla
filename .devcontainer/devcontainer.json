@@ -36,7 +36,12 @@
         },
         "ruff.lint.enable": true,
         "ruff.format.enable": true,
-        "typescript.preferences.includePackageJsonAutoImports": "on"
+        "typescript.preferences.includePackageJsonAutoImports": "on",
+        "files.watcherExclude": {
+          "**/node_modules/**": false
+        },
+        "remote.localPortHost": "allInterfaces",
+        "files.useExperimentalFileWatcher": true
       }
     }
   },
