@@ -1,3 +1,5 @@
+import uuid
+
 from sqlalchemy.orm import Session
 
 from .models import User
@@ -17,7 +19,10 @@ def create_user(
     db: Session, idp_id: str, email: str, name: str, picture_url: str | None = None
 ) -> User:
     """新規ユーザーを作成"""
-    db_user = User(idp_id=idp_id, email=email, name=name, picture_url=picture_url)
+    user_id = str(uuid.uuid4())
+    db_user = User(
+        id=user_id, idp_id=idp_id, email=email, name=name, picture_url=picture_url
+    )
     db.add(db_user)
     db.commit()
     db.refresh(db_user)
@@ -42,4 +47,3 @@ def create_or_update_user(
     else:
         # 新規ユーザーを作成
         return create_user(db, idp_id, email, name, picture_url)
-
