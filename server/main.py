@@ -4,9 +4,13 @@ from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
+from .database import Base, engine
 from .routers import auth
 
 app = FastAPI()
+
+# データベーステーブルを作成
+Base.metadata.create_all(bind=engine)
 
 # CORSミドルウェアを追加（開発用）
 app.add_middleware(

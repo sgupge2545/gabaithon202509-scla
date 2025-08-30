@@ -1,8 +1,11 @@
 import os
 
 from authlib.integrations.starlette_client import OAuth
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse, RedirectResponse
+from sqlalchemy.orm import Session
+
+from ..database import get_db, user_service
 
 router = APIRouter()
 
@@ -31,13 +34,26 @@ async def login(request: Request):
 
 
 @router.get("/callback")
-async def auth_callback(request: Request):
+async def auth_callback(request: Request, db: Session = Depends(get_db)):
     token = await oauth.google.authorize_access_token(request)
     userinfo = token.get("userinfo")
     if not userinfo:
         userinfo = await oauth.google.userinfo(token=token)
 
+    # Googleから取得したユーザー情報
+    idp_id = userinfo["sub"]
+    email = userinfo.get("email")
+    name = userinfo.get("name", "")
+    picture_url = userinfo.get("picture")
+
+    # データベースにユーザー情報を保存または更新
+    db_user = user_service.create_or_update_user(
+        db=db, idp_id=idp_id, email=email, name=name, picture_url=picture_url
+    )
+
+    # セッションにユーザー情報を保存
     request.session["user"] = {
+        "id": db_user.id,
         "sub": userinfo["sub"],
         "email": userinfo.get("email"),
         "name": userinfo.get("name"),

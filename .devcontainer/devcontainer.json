@@ -21,7 +21,8 @@
         "charliermarsh.ruff",
         "bradlc.vscode-tailwindcss",
         "esbenp.prettier-vscode",
-        "ms-vscode.vscode-typescript-next"
+        "ms-vscode.vscode-typescript-next",
+        "cweijan.vscode-database-client2"
       ],
       "settings": {
         "python.defaultInterpreterPath": "/usr/local/bin/python",
