@@ -18,18 +18,14 @@ export interface Room {
   title: string;
   visibility: "public" | "passcode";
   capacity: number;
-  member_count: number;
+  members: RoomMember[];
+  created_at: string;
 }
 
 export interface RoomMember {
   id: string;
   name: string;
   picture?: string;
-}
-
-export interface RoomDetail extends Room {
-  members: RoomMember[];
-  created_at: string;
 }
 
 // ルーム作成・編集用

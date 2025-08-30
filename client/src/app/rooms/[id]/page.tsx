@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
+import { useParams, useRouter } from "next/navigation";
 import {
   Box,
   Paper,
@@ -9,29 +10,59 @@ import {
   Typography,
   Stack,
   Avatar,
-  Divider,
   IconButton,
   Chip,
+  CircularProgress,
 } from "@mui/material";
 import { FaPaperPlane, FaArrowLeft, FaUsers } from "react-icons/fa";
 import { Message } from "@/types/message";
 import { Room } from "@/types/room";
 
-interface ChatRoomProps {
-  room: Room;
-  onBack: () => void;
-}
-
-export function ChatRoom({ room, onBack }: ChatRoomProps) {
+export default function RoomPage() {
+  const params = useParams();
+  const router = useRouter();
+  const [room, setRoom] = useState<Room | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [sendingMessage, setSendingMessage] = useState(false);
+  const [error, setError] = useState<string>("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const roomId = params?.id as string;
+
+  // ルーム情報を取得
+  useEffect(() => {
+    const fetchRoom = async () => {
+      if (!roomId) return;
+
+      try {
+        const response = await fetch(`/api/rooms/${roomId}`, {
+          credentials: "include",
+        });
+
+        if (response.ok) {
+          const roomData = await response.json();
+          setRoom(roomData);
+        } else {
+          setError("ルームが見つかりません");
+        }
+      } catch (error) {
+        setError("ルーム情報の取得に失敗しました");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchRoom();
+  }, [roomId]);
 
   // メッセージ一覧を取得
   const fetchMessages = async () => {
+    if (!roomId) return;
+
     try {
-      const response = await fetch(`/api/rooms/${room.id}/messages`);
+      const response = await fetch(`/api/rooms/${roomId}/messages`);
       if (response.ok) {
         const data = await response.json();
         setMessages(data.reverse()); // 古い順に並び替え
@@ -43,11 +74,11 @@ export function ChatRoom({ room, onBack }: ChatRoomProps) {
 
   // メッセージ送信
   const sendMessage = async () => {
-    if (!newMessage.trim() || loading) return;
+    if (!newMessage.trim() || sendingMessage || !roomId) return;
 
-    setLoading(true);
+    setSendingMessage(true);
     try {
-      const response = await fetch(`/api/rooms/${room.id}/messages`, {
+      const response = await fetch(`/api/rooms/${roomId}/messages`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -64,7 +95,7 @@ export function ChatRoom({ room, onBack }: ChatRoomProps) {
     } catch (error) {
       console.error("メッセージ送信エラー:", error);
     } finally {
-      setLoading(false);
+      setSendingMessage(false);
     }
   };
 
@@ -81,13 +112,63 @@ export function ChatRoom({ room, onBack }: ChatRoomProps) {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
+  // ルーム情報取得後にメッセージを取得
   useEffect(() => {
-    fetchMessages();
-  }, [room.id]);
+    if (room) {
+      fetchMessages();
+    }
+  }, [room]);
 
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  const handleBack = () => {
+    router.push("/rooms");
+  };
+
+  // ローディング状態
+  if (loading) {
+    return (
+      <Box
+        sx={{
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          height: "100vh",
+        }}
+      >
+        <CircularProgress />
+      </Box>
+    );
+  }
+
+  // エラー状態
+  if (error || !room) {
+    return (
+      <Box
+        sx={{
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          height: "100vh",
+          flexDirection: "column",
+        }}
+      >
+        <Typography
+          variant="h6"
+          color="error"
+          gutterBottom
+          sx={{ color: "#dc2626 !important" }}
+        >
+          {error || "ルームが見つかりません"}
+        </Typography>
+        <Button variant="contained" onClick={handleBack} sx={{ mt: 2 }}>
+          ルーム一覧に戻る
+        </Button>
+      </Box>
+    );
+  }
 
   return (
     <Box sx={{ height: "100vh", display: "flex", flexDirection: "column" }}>
@@ -102,15 +183,17 @@ export function ChatRoom({ room, onBack }: ChatRoomProps) {
         }}
       >
         <Stack direction="row" alignItems="center" spacing={2}>
-          <IconButton onClick={onBack}>
+          <IconButton onClick={handleBack}>
             <FaArrowLeft />
           </IconButton>
           <Box sx={{ flex: 1 }}>
-            <Typography variant="h6">{room.title}</Typography>
+            <Typography variant="h6" sx={{ color: "#000000 !important" }}>
+              {room.title}
+            </Typography>
             <Stack direction="row" spacing={1} alignItems="center">
               <Chip
                 icon={<FaUsers />}
-                label={`${room.member_count}/${room.capacity}`}
+                label={`${room.members?.length || 0}/${room.capacity || 0}`}
                 size="small"
                 variant="outlined"
               />
@@ -158,13 +241,13 @@ export function ChatRoom({ room, onBack }: ChatRoomProps) {
             value={newMessage}
             onChange={(e) => setNewMessage(e.target.value)}
             onKeyPress={handleKeyPress}
-            disabled={loading}
+            disabled={sendingMessage}
           />
           <Button
             variant="contained"
             endIcon={<FaPaperPlane />}
             onClick={sendMessage}
-            disabled={!newMessage.trim() || loading}
+            disabled={!newMessage.trim() || sendingMessage}
             sx={{ minWidth: 100 }}
           >
             送信
@@ -193,7 +276,10 @@ function MessageItem({ message }: { message: Message }) {
         </Avatar>
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <Stack direction="row" spacing={1} alignItems="baseline">
-            <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+            <Typography
+              variant="subtitle2"
+              sx={{ fontWeight: 600, color: "#000000 !important" }}
+            >
               {message.user?.name || "不明"}
             </Typography>
             <Typography variant="caption" color="text.secondary">
@@ -206,6 +292,7 @@ function MessageItem({ message }: { message: Message }) {
               mt: 0.5,
               wordBreak: "break-word",
               whiteSpace: "pre-wrap",
+              color: "#000000 !important",
             }}
           >
             {message.content}

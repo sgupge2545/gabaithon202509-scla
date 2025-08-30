@@ -1,14 +1,11 @@
 "use client";
 
 import { useAuth } from "@/contexts/AuthContext";
-import { useRoom } from "@/contexts/RoomContext";
-import { RoomList } from "@/components/RoomList";
-import { ChatRoom } from "@/components/ChatRoom";
 import Image from "next/image";
+import Link from "next/link";
 
 export default function Home() {
   const { user, logout } = useAuth();
-  const { selectedRoom, clearSelectedRoom } = useRoom();
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
@@ -39,11 +36,20 @@ export default function Home() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {selectedRoom ? (
-          <ChatRoom room={selectedRoom} onBack={clearSelectedRoom} />
-        ) : (
-          <RoomList />
-        )}
+        <div className="text-center">
+          <h2 className="text-4xl font-bold mb-4">
+            ようこそ、{user?.name}さん！
+          </h2>
+          <p className="text-lg text-gray-600 mb-8">
+            リアルタイムチャットアプリで友達と楽しく会話しましょう
+          </p>
+          <Link
+            href="/rooms"
+            className="inline-block bg-blue-600 text-white px-8 py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors"
+          >
+            チャットルームを見る
+          </Link>
+        </div>
       </main>
     </div>
   );

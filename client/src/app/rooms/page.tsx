@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, ChangeEvent } from "react";
+import React, { useState } from "react";
 import {
   Box,
   Card,
@@ -9,7 +9,6 @@ import {
   Button,
   Chip,
   Stack,
-  IconButton,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -23,9 +22,11 @@ import {
 import { FaPlus, FaUsers, FaLock } from "react-icons/fa";
 import { useRoom } from "@/contexts/RoomContext";
 import { Room, CreateRoomData } from "@/types/room";
+import { useRouter } from "next/navigation";
 
-export function RoomList() {
-  const { publicRooms, loading, createRoom, joinRoom, selectRoom } = useRoom();
+export default function RoomsPage() {
+  const { publicRooms, loading, createRoom, joinRoom } = useRoom();
+  const router = useRouter();
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [joinDialogOpen, setJoinDialogOpen] = useState(false);
   const [selectedRoomId, setSelectedRoomId] = useState<string>("");
@@ -53,7 +54,7 @@ export function RoomList() {
       // 作成したルームに自動参加してチャット画面に移動
       const joinSuccess = await joinRoom(room.id);
       if (joinSuccess) {
-        selectRoom(room);
+        router.push(`/rooms/${room.id}`);
       }
     }
   };
@@ -65,7 +66,7 @@ export function RoomList() {
     } else {
       const success = await joinRoom(room.id);
       if (success) {
-        selectRoom(room);
+        router.push(`/rooms/${room.id}`);
       }
     }
   };
@@ -73,10 +74,7 @@ export function RoomList() {
   const handleJoinWithPasscode = async () => {
     const success = await joinRoom(selectedRoomId, { passcode });
     if (success) {
-      const room = publicRooms.find((r) => r.id === selectedRoomId);
-      if (room) {
-        selectRoom(room);
-      }
+      router.push(`/rooms/${selectedRoomId}`);
       setJoinDialogOpen(false);
       setPasscode("");
       setSelectedRoomId("");
@@ -119,7 +117,7 @@ export function RoomList() {
                   <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
                     <Chip
                       icon={<FaUsers />}
-                      label={`${room.member_count}/${room.capacity}`}
+                      label={`${room.members?.length || 0}/${room.capacity}`}
                       size="small"
                     />
                     {room.visibility === "passcode" && (
@@ -137,9 +135,11 @@ export function RoomList() {
                   onClick={() =>
                     handleJoinRoom(room, room.visibility === "passcode")
                   }
-                  disabled={room.member_count >= room.capacity}
+                  disabled={(room.members?.length || 0) >= room.capacity}
                 >
-                  {room.member_count >= room.capacity ? "満室" : "参加"}
+                  {(room.members?.length || 0) >= room.capacity
+                    ? "満室"
+                    : "参加"}
                 </Button>
               </Stack>
             </CardContent>

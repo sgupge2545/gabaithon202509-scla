@@ -1,13 +1,13 @@
 "use client";
 
 import React, { createContext, useContext, useEffect, useState } from "react";
-import { Room, RoomDetail, CreateRoomData, JoinRoomData } from "@/types/room";
+import { Room, CreateRoomData, JoinRoomData } from "@/types/room";
 import { useRoomApi } from "@/hooks/useRoomApi";
 
 interface RoomContextType {
   // 状態
   publicRooms: Room[];
-  currentRoom: RoomDetail | null;
+  currentRoom: Room | null;
   selectedRoom: Room | null;
   loading: boolean;
 
@@ -38,7 +38,7 @@ interface RoomProviderProps {
 
 export function RoomProvider({ children }: RoomProviderProps) {
   const [publicRooms, setPublicRooms] = useState<Room[]>([]);
-  const [currentRoom, setCurrentRoomState] = useState<RoomDetail | null>(null);
+  const [currentRoom, setCurrentRoomState] = useState<Room | null>(null);
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
   const [loading, setLoading] = useState(false);
 
