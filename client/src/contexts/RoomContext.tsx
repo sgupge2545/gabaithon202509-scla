@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { Room, CreateRoomData, JoinRoomData } from "@/types/room";
 import { useRoomApi } from "@/hooks/useRoomApi";
+import { useRoomsSocket, RoomsEvent } from "@/hooks/useRoomsSocket";
 
 interface RoomContextType {
   // 状態
@@ -128,6 +129,26 @@ export function RoomProvider({ children }: RoomProviderProps) {
   useEffect(() => {
     fetchPublicRooms();
   }, []);
+
+  // リアルタイム更新の購読
+  useRoomsSocket((ev: RoomsEvent) => {
+    if (!ev) return;
+    if (ev.type === "room_created") {
+      const room = ev.room as Room;
+      if (room.visibility === "public") {
+        setPublicRooms((prev) => [room, ...prev]);
+      }
+    } else if (ev.type === "room_updated") {
+      const updated = ev.room;
+      setPublicRooms((prev) =>
+        prev.map((r) =>
+          r.id === updated.id ? { ...r, member_count: updated.member_count } : r
+        )
+      );
+    } else if (ev.type === "room_deleted") {
+      setPublicRooms((prev) => prev.filter((r) => r.id !== ev.room_id));
+    }
+  });
 
   const value = {
     publicRooms,
