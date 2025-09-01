@@ -91,9 +91,10 @@ def get_public_rooms(db: Session, limit: int = 20) -> List[Room]:
     """
     公開ルーム一覧を取得（参加者数付き）
     """
+    # 公開とパスコード付きのルームを一覧に含める
     return (
         db.query(Room)
-        .filter(Room.visibility == "public")
+        .filter(Room.visibility.in_(["public", "passcode"]))
         .order_by(Room.created_at.desc())
         .limit(limit)
         .all()

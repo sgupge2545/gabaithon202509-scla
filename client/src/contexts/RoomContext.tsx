@@ -59,9 +59,11 @@ export function RoomProvider({ children }: RoomProviderProps) {
     const { data, error } = await roomApi.createRoom(roomData);
 
     if (data) {
-      // 新しいルームを一覧に追加
+      // 新しいルームを一覧に追加（公開・パスコード付き両方）
       setPublicRooms((prev) =>
-        data.visibility === "public" ? [data, ...prev] : prev
+        data.visibility === "public" || data.visibility === "passcode"
+          ? [data, ...prev]
+          : prev
       );
     }
 
@@ -135,7 +137,7 @@ export function RoomProvider({ children }: RoomProviderProps) {
     if (!ev) return;
     if (ev.type === "room_created") {
       const room = ev.room as Room;
-      if (room.visibility === "public") {
+      if (room.visibility === "public" || room.visibility === "passcode") {
         setPublicRooms((prev) => [room, ...prev]);
       }
     } else if (ev.type === "room_updated") {
