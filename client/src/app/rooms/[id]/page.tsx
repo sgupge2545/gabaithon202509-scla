@@ -17,6 +17,7 @@ import {
 import { FaPaperPlane, FaArrowLeft, FaUsers } from "react-icons/fa";
 import { Message } from "@/types/message";
 import { Room } from "@/types/room";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function RoomPage() {
   const params = useParams();
@@ -30,6 +31,8 @@ export default function RoomPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const roomId = params?.id as string;
+
+  const { user } = useAuth();
 
   // ルーム情報を取得
   useEffect(() => {
@@ -268,20 +271,33 @@ function MessageItem({ message }: { message: Message }) {
     });
   };
 
+  const { user } = useAuth();
+
+  const isOwnMessage = message.user?.id === user?.id;
+
   return (
-    <Box>
+    <Box
+      sx={{
+        display: "flex",
+        justifyContent: isOwnMessage ? "flex-end" : "flex-start",
+      }}
+    >
       <Stack direction="row" spacing={2} alignItems="flex-start">
-        <Avatar src={message.user?.picture} sx={{ width: 40, height: 40 }}>
-          {message.user?.name?.charAt(0) || "?"}
-        </Avatar>
+        {!isOwnMessage && message.user && (
+          <Avatar src={message.user.picture} sx={{ width: 40, height: 40 }}>
+            {message.user.name?.charAt(0) || "?"}
+          </Avatar>
+        )}
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <Stack direction="row" spacing={1} alignItems="baseline">
-            <Typography
-              variant="subtitle2"
-              sx={{ fontWeight: 600, color: "#000000 !important" }}
-            >
-              {message.user?.name || "不明"}
-            </Typography>
+            {!isOwnMessage && message.user && (
+              <Typography
+                variant="subtitle2"
+                sx={{ fontWeight: 600, color: "#000000 !important" }}
+              >
+                {message.user.name || "不明"}
+              </Typography>
+            )}
             <Typography variant="caption" color="text.secondary">
               {formatTime(message.created_at)}
             </Typography>
@@ -293,11 +309,17 @@ function MessageItem({ message }: { message: Message }) {
               wordBreak: "break-word",
               whiteSpace: "pre-wrap",
               color: "#000000 !important",
+              textAlign: isOwnMessage ? "right" : "left",
             }}
           >
             {message.content}
           </Typography>
         </Box>
+        {isOwnMessage && message.user && (
+          <Avatar src={message.user.picture} sx={{ width: 40, height: 40 }}>
+            {message.user.name?.charAt(0) || "?"}
+          </Avatar>
+        )}
       </Stack>
     </Box>
   );
