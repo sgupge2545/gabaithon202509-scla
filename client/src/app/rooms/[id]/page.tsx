@@ -185,7 +185,7 @@ export default function RoomPage() {
       </div>
 
       {/* メッセージ入力エリア */}
-      <div className="p-4 bg-muted/30 border-t">
+      <div className="p-4 bg-muted/30">
         <div className="flex items-end space-x-2">
           <Textarea
             placeholder="メッセージを入力..."
@@ -199,10 +199,9 @@ export default function RoomPage() {
           <Button
             onClick={sendMessage}
             disabled={!newMessage.trim() || sendingMessage}
-            className="min-w-[100px]"
+            className="min-w-[60px]"
           >
-            <FaPaperPlane className="h-4 w-4 mr-2" />
-            送信
+            <FaPaperPlane />
           </Button>
         </div>
       </div>
