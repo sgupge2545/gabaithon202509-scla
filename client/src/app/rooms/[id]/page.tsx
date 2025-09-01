@@ -7,6 +7,7 @@ import { FaPaperPlane, FaArrowLeft, FaUsers } from "react-icons/fa";
 import type { Message } from "@/types/message";
 import type { Room } from "@/types/room";
 import { useAuth } from "@/contexts/AuthContext";
+import { useRoom } from "@/contexts/RoomContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
@@ -27,6 +28,7 @@ export default function RoomPage() {
   const { user } = useAuth(); // Declare the user variable here
 
   const roomId = params?.id as string;
+  const { leaveRoom } = useRoom();
 
   // WebSocket + initial load handled by hook
   const { messages: socketMessages, sendMessage: sendMessageHook } =
@@ -100,7 +102,14 @@ export default function RoomPage() {
     scrollToBottom();
   }, [messages]);
 
-  const handleBack = () => {
+  const handleBack = async () => {
+    if (roomId) {
+      try {
+        await leaveRoom(roomId);
+      } catch (e) {
+        // ignore
+      }
+    }
     router.push("/rooms");
   };
 

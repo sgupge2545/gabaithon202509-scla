@@ -165,6 +165,18 @@ def leave_room(db: Session, room_id: str, user_id: str) -> bool:
     try:
         db.delete(member)
         db.commit()
+        # 退出後、メンバーがいなければルームを削除
+        remaining = (
+            db.query(func.count(RoomMember.user_id))
+            .filter(RoomMember.room_id == room_id)
+            .scalar()
+        )
+        if remaining == 0:
+            # CASCADE削除
+            db.execute(
+                text("DELETE FROM rooms WHERE id = :room_id"), {"room_id": room_id}
+            )
+            db.commit()
         return True
     except Exception:
         db.rollback()

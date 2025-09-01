@@ -4,12 +4,19 @@
 
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    Request,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session
 
 from ..database import get_db, room_service
-from ..database.models import Room, User
+from ..services.collection_manager import manager
 
 
 # レスポンスモデル
@@ -111,7 +118,7 @@ async def create_room(
             capacity=room_data.capacity,
         )
 
-        return RoomResponse(
+        resp = RoomResponse(
             id=room.id,
             title=room.title,
             visibility=room.visibility,
@@ -119,7 +126,27 @@ async def create_room(
             member_count=1,  # 作成者が自動参加
             created_at=room.created_at,
         )
-    except Exception as e:
+        # notify room list listeners
+        try:
+            await manager.broadcast(
+                "__rooms__",
+                {
+                    "type": "room_created",
+                    "room": {
+                        "id": resp.id,
+                        "title": resp.title,
+                        "visibility": resp.visibility,
+                        "capacity": resp.capacity,
+                        "member_count": resp.member_count,
+                        "created_at": resp.created_at,
+                    },
+                },
+            )
+        except Exception:
+            pass
+
+        return resp
+    except Exception:
         raise HTTPException(status_code=500, detail="ルーム作成に失敗しました")
 
 
@@ -183,6 +210,17 @@ async def get_room_detail(
     )
 
 
+@router.websocket("/ws")
+async def rooms_websocket(websocket: WebSocket):
+    """ルーム一覧向け WebSocket: ルーム作成/削除/更新の通知を受け取る"""
+    await manager.connect("__rooms__", websocket)
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        await manager.disconnect("__rooms__", websocket)
+
+
 @router.post("/{room_id}/join")
 async def join_room(
     room_id: str,
@@ -206,6 +244,20 @@ async def join_room(
             detail="参加に失敗しました（定員超過・パスコード間違い・ルームが存在しません）",
         )
 
+    # notify room list / room update listeners
+    try:
+        room = room_service.get_room_by_id(db, room_id)
+        member_count = len(room.members) if room else 0
+        await manager.broadcast(
+            "__rooms__",
+            {
+                "type": "room_updated",
+                "room": {"id": room_id, "member_count": member_count},
+            },
+        )
+    except Exception:
+        pass
+
     return {"message": "参加しました"}
 
 
@@ -226,6 +278,25 @@ async def leave_room(
 
     if not success:
         raise HTTPException(status_code=500, detail="退出に失敗しました")
+
+    # check if room still exists; if not, broadcast deletion
+    try:
+        room = room_service.get_room_by_id(db, room_id)
+        if not room:
+            await manager.broadcast(
+                "__rooms__", {"type": "room_deleted", "room_id": room_id}
+            )
+        else:
+            member_count = len(room.members)
+            await manager.broadcast(
+                "__rooms__",
+                {
+                    "type": "room_updated",
+                    "room": {"id": room_id, "member_count": member_count},
+                },
+            )
+    except Exception:
+        pass
 
     return {"message": "退出しました"}
 
