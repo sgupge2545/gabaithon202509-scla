@@ -4,13 +4,21 @@
 
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    Request,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from ..database import get_db, room_service
 from ..database.message_service import create_message, get_room_messages
 from ..database.models import User
+from ..services.collection_manager import manager
 
 router = APIRouter()
 
@@ -83,6 +91,18 @@ async def get_messages(
     return result
 
 
+@router.websocket("/{room_id}/ws")
+async def websocket_endpoint(websocket: WebSocket, room_id: str):
+    """WebSocket 接続: room_id ごとにクライアントを管理する"""
+    await manager.connect(room_id, websocket)
+    try:
+        while True:
+            # クライアントからのメッセージを待機して接続を維持する（処理は不要）
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        await manager.disconnect(room_id, websocket)
+
+
 @router.post("/{room_id}/messages", response_model=MessageResponse)
 async def send_message(
     room_id: str,
@@ -115,6 +135,23 @@ async def send_message(
             "name": user.name,
             "picture": user.picture_url,
         }
+
+    # ブロードキャスト
+    payload = {
+        "id": message.id,
+        "room_id": message.room_id,
+        "user_id": message.user_id,
+        "content": message.content,
+        "created_at": message.created_at,
+        "user": user_info,
+    }
+
+    # 可能なら非同期で全クライアントに配信
+    try:
+        await manager.broadcast(room_id, payload)
+    except Exception:
+        # ブロードキャスト失敗は致命的ではない
+        pass
 
     return MessageResponse(
         id=message.id,

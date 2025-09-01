@@ -12,6 +12,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { useRoomSocket } from "@/hooks/useRoomSocket";
 
 export default function RoomPage() {
   const params = useParams();
@@ -26,6 +27,14 @@ export default function RoomPage() {
   const { user } = useAuth(); // Declare the user variable here
 
   const roomId = params?.id as string;
+
+  // WebSocket + initial load handled by hook
+  const { messages: socketMessages, sendMessage: sendMessageHook } =
+    useRoomSocket(roomId);
+
+  useEffect(() => {
+    setMessages(socketMessages);
+  }, [socketMessages]);
 
   // ルーム情報を取得
   useEffect(() => {
@@ -53,20 +62,7 @@ export default function RoomPage() {
     fetchRoom();
   }, [roomId]);
 
-  // メッセージ一覧を取得
-  const fetchMessages = async () => {
-    if (!roomId) return;
-
-    try {
-      const response = await fetch(`/api/rooms/${roomId}/messages`);
-      if (response.ok) {
-        const data = await response.json();
-        setMessages(data.reverse()); // 古い順に並び替え
-      }
-    } catch (error) {
-      console.error("メッセージ取得エラー:", error);
-    }
-  };
+  // メッセージは useRoomSocket フックで取得・更新されます
 
   // メッセージ送信
   const sendMessage = async () => {
@@ -74,26 +70,16 @@ export default function RoomPage() {
 
     setSendingMessage(true);
     try {
-      const response = await fetch(`/api/rooms/${roomId}/messages`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        credentials: "include",
-        body: JSON.stringify({ content: newMessage }),
-      });
-
-      if (response.ok) {
-        const sentMessage = await response.json();
-        setMessages((prev) => [...prev, sentMessage]);
-        setNewMessage("");
-      }
+      await sendMessageHook(newMessage);
+      setNewMessage("");
     } catch (error) {
       console.error("メッセージ送信エラー:", error);
     } finally {
       setSendingMessage(false);
     }
   };
+
+  // WebSocket は useRoomSocket で接続済み
 
   // Enterキーでメッセージ送信
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -108,12 +94,7 @@ export default function RoomPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  // ルーム情報取得後にメッセージを取得
-  useEffect(() => {
-    if (room) {
-      fetchMessages();
-    }
-  }, [room]);
+  // ルーム情報取得後の処理は特に必要ありません（フックがroomIdベースで動作します）
 
   useEffect(() => {
     scrollToBottom();
