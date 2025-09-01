@@ -5,6 +5,7 @@ const nextConfig: NextConfig = {
 
   // 画像最適化の設定
   images: {
+    unoptimized: true,
     remotePatterns: [
       {
         protocol: "https",
