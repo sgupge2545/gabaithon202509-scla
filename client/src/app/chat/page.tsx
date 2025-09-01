@@ -1,11 +1,9 @@
 "use client";
 
-import type React from "react";
-import { useState, useEffect, useRef } from "react";
-import { useParams, useRouter } from "next/navigation";
+import React, { useEffect, useRef, useState } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { FaPaperPlane, FaArrowLeft, FaUsers } from "react-icons/fa";
 import type { Message } from "@/types/message";
-import type { Room } from "@/types/room";
 import { useAuth } from "@/contexts/AuthContext";
 import { useRoom } from "@/contexts/RoomContext";
 import { Button } from "@/components/ui/button";
@@ -15,58 +13,60 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { useRoomSocket } from "@/hooks/useRoomSocket";
 
-export default function RoomPage() {
-  const params = useParams();
+export default function ChatPage() {
+  const searchParams = useSearchParams();
   const router = useRouter();
-  const [room, setRoom] = useState<Room | null>(null);
+  const [roomId, setRoomId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const [sendingMessage, setSendingMessage] = useState(false);
   const [error, setError] = useState<string>("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const { user } = useAuth(); // Declare the user variable here
 
-  const roomId = params?.id as string;
-  const { leaveRoom } = useRoom();
+  const { user } = useAuth();
+  const { leaveRoom, setCurrentRoom, currentRoom } = useRoom();
+
+  // 初期 roomId: クエリ ＞ sessionStorage
+  useEffect(() => {
+    const q = searchParams.get("room_id");
+    const stored =
+      typeof window !== "undefined" ? sessionStorage.getItem("room_id") : null;
+    const id = q || stored;
+
+    if (!id) {
+      setLoading(false);
+      return;
+    }
+
+    setRoomId(id);
+    try {
+      sessionStorage.setItem("room_id", id);
+    } catch (e) {
+      // ignore storage errors
+    }
+
+    // RoomContext 経由でルーム情報を取得
+    (async () => {
+      setLoading(true);
+      try {
+        await setCurrentRoom(id);
+      } catch (e) {
+        setError("ルーム情報の取得に失敗しました");
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [searchParams, setCurrentRoom]);
 
   // WebSocket + initial load handled by hook
   const { messages: socketMessages, sendMessage: sendMessageHook } =
-    useRoomSocket(roomId);
+    useRoomSocket(roomId || "");
 
   useEffect(() => {
     setMessages(socketMessages);
   }, [socketMessages]);
 
-  // ルーム情報を取得
-  useEffect(() => {
-    const fetchRoom = async () => {
-      if (!roomId) return;
-
-      try {
-        const response = await fetch(`/api/rooms/${roomId}`, {
-          credentials: "include",
-        });
-
-        if (response.ok) {
-          const roomData = await response.json();
-          setRoom(roomData);
-        } else {
-          setError("ルームが見つかりません");
-        }
-      } catch (error) {
-        setError("ルーム情報の取得に失敗しました");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchRoom();
-  }, [roomId]);
-
-  // メッセージは useRoomSocket フックで取得・更新されます
-
-  // メッセージ送信
   const sendMessage = async () => {
     if (!newMessage.trim() || sendingMessage || !roomId) return;
 
@@ -74,16 +74,13 @@ export default function RoomPage() {
     try {
       await sendMessageHook(newMessage);
       setNewMessage("");
-    } catch (error) {
-      console.error("メッセージ送信エラー:", error);
+    } catch (e) {
+      // ignore
     } finally {
       setSendingMessage(false);
     }
   };
 
-  // WebSocket は useRoomSocket で接続済み
-
-  // Enterキーでメッセージ送信
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -91,12 +88,9 @@ export default function RoomPage() {
     }
   };
 
-  // 最新メッセージまでスクロール
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
-
-  // ルーム情報取得後の処理は特に必要ありません（フックがroomIdベースで動作します）
 
   useEffect(() => {
     scrollToBottom();
@@ -110,10 +104,14 @@ export default function RoomPage() {
         // ignore
       }
     }
+    try {
+      sessionStorage.removeItem("room_id");
+    } catch (e) {
+      // ignore
+    }
     router.push("/rooms");
   };
 
-  // ローディング状態
   if (loading) {
     return (
       <div className="flex justify-center items-center h-screen">
@@ -122,8 +120,7 @@ export default function RoomPage() {
     );
   }
 
-  // エラー状態
-  if (error || !room) {
+  if (error || !currentRoom) {
     return (
       <div className="flex justify-center items-center h-screen flex-col">
         <h2 className="text-xl font-semibold text-destructive mb-4">
@@ -136,7 +133,6 @@ export default function RoomPage() {
 
   return (
     <div className="h-screen flex flex-col">
-      {/* ヘッダー */}
       <Card className="rounded-none border-b border-t-0 border-l-0 border-r-0">
         <CardContent className="p-4">
           <div className="flex items-center space-x-4">
@@ -144,7 +140,7 @@ export default function RoomPage() {
               <FaArrowLeft className="h-4 w-4" />
             </Button>
             <div className="flex-1">
-              <h1 className="text-lg font-semibold">{room.title}</h1>
+              <h1 className="text-lg font-semibold">{currentRoom.title}</h1>
               <div className="flex items-center space-x-2 mt-1">
                 <Badge
                   variant="outline"
@@ -152,10 +148,11 @@ export default function RoomPage() {
                 >
                   <FaUsers className="h-3 w-3" />
                   <span>
-                    {room.members?.length || 0}/{room.capacity || 0}
+                    {currentRoom.members?.length || 0}/
+                    {currentRoom.capacity || 0}
                   </span>
                 </Badge>
-                {room.visibility === "passcode" && (
+                {currentRoom.visibility === "passcode" && (
                   <Badge variant="secondary">パスコード</Badge>
                 )}
               </div>
@@ -164,7 +161,6 @@ export default function RoomPage() {
         </CardContent>
       </Card>
 
-      {/* メッセージエリア */}
       <div className="flex-1 overflow-auto p-2 bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
         <div className="space-y-3">
           {messages.map((message, index) => {
@@ -186,7 +182,6 @@ export default function RoomPage() {
         </div>
       </div>
 
-      {/* メッセージ入力エリア */}
       <div className="p-4 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700">
         <div className="flex items-end space-x-3">
           <div className="flex-1 relative">
@@ -218,7 +213,6 @@ function isOwnMessage(message: Message, user: { id?: string } | null) {
   return message.user?.id === user?.id;
 }
 
-// メッセージアイテムコンポーネント
 function MessageItem({
   message,
   showAvatar = true,
@@ -246,7 +240,6 @@ function MessageItem({
       } mb-1 px-2`}
     >
       <div className="flex items-end max-w-[75%]">
-        {/* アバター */}
         <div
           className={`flex-shrink-0 ${
             isOwnMessageFunc ? "order-2 ml-2" : "order-1 mr-2"
@@ -270,20 +263,17 @@ function MessageItem({
           )}
         </div>
 
-        {/* メッセージバブル */}
         <div
           className={`flex flex-col ${
             isOwnMessageFunc ? "order-1" : "order-2"
           }`}
         >
-          {/* ユーザー名 */}
           {showName && !isOwnMessageFunc && message.user && (
             <div className="text-xs text-slate-600 dark:text-slate-400 mb-1 ml-3">
               {message.user.name || "不明"}
             </div>
           )}
 
-          {/* メッセージ内容 */}
           <div
             className={`relative px-4 py-2 rounded-2xl max-w-md break-words ${
               isOwnMessageFunc
@@ -294,8 +284,6 @@ function MessageItem({
             <div className="text-sm leading-relaxed whitespace-pre-wrap">
               {message.content}
             </div>
-
-            {/* 時刻表示 */}
             <div
               className={`text-xs mt-1 ${
                 isOwnMessageFunc
@@ -305,8 +293,6 @@ function MessageItem({
             >
               {formatTime(message.created_at)}
             </div>
-
-            {/* バブルの矢印 */}
             <div
               className={`absolute top-4 w-0 h-0 ${
                 isOwnMessageFunc

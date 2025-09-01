@@ -56,7 +56,7 @@ export function RoomProvider({ children }: RoomProviderProps) {
 
   const createRoom = async (roomData: CreateRoomData): Promise<Room | null> => {
     setLoading(true);
-    const { data, error } = await roomApi.createRoom(roomData);
+    const { data } = await roomApi.createRoom(roomData);
 
     if (data) {
       // 新しいルームを一覧に追加（公開・パスコード付き両方）

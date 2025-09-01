@@ -51,8 +51,8 @@ export default function RoomsPage() {
         passcode: "",
         capacity: 5,
       });
-      // 作成時はサーバー側で作成者は自動参加されるため、直接チャット画面へ遷移
-      router.push(`/rooms/${room.id}`);
+      // 作成時はサーバー側で作成者は自動参加されるため、クエリ形式でチャット画面へ遷移
+      router.push(`/chat?room_id=${room.id}`);
     }
   };
 
@@ -63,7 +63,7 @@ export default function RoomsPage() {
     } else {
       const success = await joinRoom(room.id);
       if (success) {
-        router.push(`/rooms/${room.id}`);
+        router.push(`/chat?room_id=${room.id}`);
       }
     }
   };
@@ -71,7 +71,7 @@ export default function RoomsPage() {
   const handleJoinWithPasscode = async () => {
     const success = await joinRoom(selectedRoomId, { passcode });
     if (success) {
-      router.push(`/rooms/${selectedRoomId}`);
+      router.push(`/chat?room_id=${selectedRoomId}`);
       setJoinDialogOpen(false);
       setPasscode("");
       setSelectedRoomId("");

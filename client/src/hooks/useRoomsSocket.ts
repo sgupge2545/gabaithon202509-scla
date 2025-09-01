@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import type { Room } from "../types/room";
 
 export type RoomsEvent =
-  | { type: "room_created"; room: any }
+  | { type: "room_created"; room: Room }
   | { type: "room_updated"; room: { id: string; member_count: number } }
   | { type: "room_deleted"; room_id: string };
 

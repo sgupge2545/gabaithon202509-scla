@@ -1,13 +1,7 @@
 "use client";
 
 import { useCallback } from "react";
-import {
-  Room,
-  RoomDetail,
-  RoomMember,
-  CreateRoomData,
-  JoinRoomData,
-} from "@/types/room";
+import { Room, CreateRoomData, JoinRoomData } from "@/types/room";
 
 export function useRoomApi() {
   const createRoom = useCallback(
@@ -34,7 +28,7 @@ export function useRoomApi() {
 
         const room: Room = await res.json();
         return { data: room };
-      } catch (error) {
+      } catch {
         return { data: null, error: "network_error" };
       }
     },
@@ -60,7 +54,7 @@ export function useRoomApi() {
 
       const rooms: Room[] = await res.json();
       return { data: rooms };
-    } catch (error) {
+    } catch {
       return { data: null, error: "network_error" };
     }
   }, []);
@@ -69,7 +63,7 @@ export function useRoomApi() {
     async (
       roomId: string
     ): Promise<{
-      data: RoomDetail | null;
+      data: Room | null;
       error?: string;
     }> => {
       try {
@@ -85,9 +79,9 @@ export function useRoomApi() {
           return { data: null, error: `HTTP_${res.status}` };
         }
 
-        const room: RoomDetail = await res.json();
+        const room: Room = await res.json();
         return { data: room };
-      } catch (error) {
+      } catch {
         return { data: null, error: "network_error" };
       }
     },
@@ -117,7 +111,7 @@ export function useRoomApi() {
         }
 
         return {};
-      } catch (error) {
+      } catch {
         return { error: "network_error" };
       }
     },
@@ -144,7 +138,7 @@ export function useRoomApi() {
         }
 
         return {};
-      } catch (error) {
+      } catch {
         return { error: "network_error" };
       }
     },

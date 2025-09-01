@@ -2,6 +2,7 @@ import os
 
 from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
 from .database import Base, engine
@@ -60,3 +61,6 @@ app.include_router(api_router, prefix="/api", tags=["api"])
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(rooms.router, prefix="/api/rooms", tags=["rooms"])
 app.include_router(messages.router, prefix="/api/rooms", tags=["messages"])
+
+# Serve exported Next.js static files
+app.mount("/", StaticFiles(directory="client/out", html=True), name="static")
