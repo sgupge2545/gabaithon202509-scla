@@ -19,8 +19,12 @@ RUN apt-get update && apt-get install -y \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Node.jsの依存関係はコンテナ起動時に毎回インストールする方針
+# Node.jsの依存関係を先にインストール（キャッシュ効率化）
 COPY client/package*.json ./client/
+WORKDIR /app/client
+# package-lock.json がある場合は npm ci を使うとより再現性が高くキャッシュに向いている
+RUN npm ci --prefer-offline --no-audit --no-fund
+WORKDIR /app
 
 # アプリケーションコードをコピー（最後に行うことで上記のキャッシュが有効活用される）
 COPY . .
