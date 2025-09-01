@@ -17,6 +17,7 @@
   "customizations": {
     "vscode": {
       "extensions": [
+        "dbaeumer.vscode-eslint",
         "ms-python.python",
         "charliermarsh.ruff",
         "bradlc.vscode-tailwindcss",
