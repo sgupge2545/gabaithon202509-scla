@@ -1,23 +1,17 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import type React from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
-import {
-  Box,
-  Paper,
-  TextField,
-  Button,
-  Typography,
-  Stack,
-  Avatar,
-  IconButton,
-  Chip,
-  CircularProgress,
-} from "@mui/material";
 import { FaPaperPlane, FaArrowLeft, FaUsers } from "react-icons/fa";
-import { Message } from "@/types/message";
-import { Room } from "@/types/room";
+import type { Message } from "@/types/message";
+import type { Room } from "@/types/room";
 import { useAuth } from "@/contexts/AuthContext";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Textarea } from "@/components/ui/textarea";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
 
 export default function RoomPage() {
   const params = useParams();
@@ -31,7 +25,6 @@ export default function RoomPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const roomId = params?.id as string;
-
   const { user } = useAuth();
 
   // ルーム情報を取得
@@ -133,131 +126,87 @@ export default function RoomPage() {
   // ローディング状態
   if (loading) {
     return (
-      <Box
-        sx={{
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-          height: "100vh",
-        }}
-      >
-        <CircularProgress />
-      </Box>
+      <div className="flex justify-center items-center h-screen">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
     );
   }
 
   // エラー状態
   if (error || !room) {
     return (
-      <Box
-        sx={{
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-          height: "100vh",
-          flexDirection: "column",
-        }}
-      >
-        <Typography
-          variant="h6"
-          color="error"
-          gutterBottom
-          sx={{ color: "#dc2626 !important" }}
-        >
+      <div className="flex justify-center items-center h-screen flex-col">
+        <h2 className="text-xl font-semibold text-destructive mb-4">
           {error || "ルームが見つかりません"}
-        </Typography>
-        <Button variant="contained" onClick={handleBack} sx={{ mt: 2 }}>
-          ルーム一覧に戻る
-        </Button>
-      </Box>
+        </h2>
+        <Button onClick={handleBack}>ルーム一覧に戻る</Button>
+      </div>
     );
   }
 
   return (
-    <Box sx={{ height: "100vh", display: "flex", flexDirection: "column" }}>
+    <div className="h-screen flex flex-col">
       {/* ヘッダー */}
-      <Paper
-        elevation={1}
-        sx={{
-          p: 2,
-          borderRadius: 0,
-          borderBottom: 1,
-          borderColor: "divider",
-        }}
-      >
-        <Stack direction="row" alignItems="center" spacing={2}>
-          <IconButton onClick={handleBack}>
-            <FaArrowLeft />
-          </IconButton>
-          <Box sx={{ flex: 1 }}>
-            <Typography variant="h6" sx={{ color: "#000000 !important" }}>
-              {room.title}
-            </Typography>
-            <Stack direction="row" spacing={1} alignItems="center">
-              <Chip
-                icon={<FaUsers />}
-                label={`${room.members?.length || 0}/${room.capacity || 0}`}
-                size="small"
-                variant="outlined"
-              />
-              {room.visibility === "passcode" && (
-                <Chip label="パスコード" size="small" color="secondary" />
-              )}
-            </Stack>
-          </Box>
-        </Stack>
-      </Paper>
+      <Card className="rounded-none border-b border-t-0 border-l-0 border-r-0">
+        <CardContent className="p-4">
+          <div className="flex items-center space-x-4">
+            <Button variant="ghost" size="icon" onClick={handleBack}>
+              <FaArrowLeft className="h-4 w-4" />
+            </Button>
+            <div className="flex-1">
+              <h1 className="text-lg font-semibold">{room.title}</h1>
+              <div className="flex items-center space-x-2 mt-1">
+                <Badge
+                  variant="outline"
+                  className="flex items-center space-x-1"
+                >
+                  <FaUsers className="h-3 w-3" />
+                  <span>
+                    {room.members?.length || 0}/{room.capacity || 0}
+                  </span>
+                </Badge>
+                {room.visibility === "passcode" && (
+                  <Badge variant="secondary">パスコード</Badge>
+                )}
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* メッセージエリア */}
-      <Box
-        sx={{
-          flex: 1,
-          overflow: "auto",
-          p: 2,
-          bgcolor: "grey.50",
-        }}
-      >
-        <Stack spacing={2}>
+      <div className="flex-1 overflow-auto p-4 bg-muted/30">
+        <div className="space-y-4">
           {messages.map((message) => (
             <MessageItem key={message.id} message={message} />
           ))}
           <div ref={messagesEndRef} />
-        </Stack>
-      </Box>
+        </div>
+      </div>
 
       {/* メッセージ入力エリア */}
-      <Paper
-        elevation={1}
-        sx={{
-          p: 2,
-          borderRadius: 0,
-          borderTop: 1,
-          borderColor: "divider",
-        }}
-      >
-        <Stack direction="row" spacing={2} alignItems="end">
-          <TextField
-            multiline
-            maxRows={4}
-            fullWidth
+      <div className="p-4 bg-muted/30 border-t">
+        <div className="flex items-end space-x-2">
+          <Textarea
             placeholder="メッセージを入力..."
             value={newMessage}
             onChange={(e) => setNewMessage(e.target.value)}
             onKeyPress={handleKeyPress}
             disabled={sendingMessage}
+            className="min-h-[40px] max-h-32 resize-none"
+            rows={1}
           />
           <Button
-            variant="contained"
-            endIcon={<FaPaperPlane />}
             onClick={sendMessage}
             disabled={!newMessage.trim() || sendingMessage}
-            sx={{ minWidth: 100 }}
+            className="min-w-[100px]"
           >
+            <FaPaperPlane className="h-4 w-4 mr-2" />
             送信
           </Button>
-        </Stack>
-      </Paper>
-    </Box>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -272,55 +221,47 @@ function MessageItem({ message }: { message: Message }) {
   };
 
   const { user } = useAuth();
-
   const isOwnMessage = message.user?.id === user?.id;
 
   return (
-    <Box
-      sx={{
-        display: "flex",
-        justifyContent: isOwnMessage ? "flex-end" : "flex-start",
-      }}
-    >
-      <Stack direction="row" spacing={2} alignItems="flex-start">
+    <div className={`flex ${isOwnMessage ? "justify-end" : "justify-start"}`}>
+      <div className="flex items-start space-x-3 max-w-[70%]">
         {!isOwnMessage && message.user && (
-          <Avatar src={message.user.picture} sx={{ width: 40, height: 40 }}>
-            {message.user.name?.charAt(0) || "?"}
+          <Avatar className="w-10 h-10">
+            <AvatarImage src={message.user.picture || "/placeholder.svg"} />
+            <AvatarFallback>
+              {message.user.name?.charAt(0) || "?"}
+            </AvatarFallback>
           </Avatar>
         )}
-        <Box sx={{ flex: 1, minWidth: 0 }}>
-          <Stack direction="row" spacing={1} alignItems="baseline">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-baseline space-x-2 mb-1">
             {!isOwnMessage && message.user && (
-              <Typography
-                variant="subtitle2"
-                sx={{ fontWeight: 600, color: "#000000 !important" }}
-              >
+              <span className="text-sm font-semibold">
                 {message.user.name || "不明"}
-              </Typography>
+              </span>
             )}
-            <Typography variant="caption" color="text.secondary">
+            <span className="text-xs text-muted-foreground">
               {formatTime(message.created_at)}
-            </Typography>
-          </Stack>
-          <Typography
-            variant="body2"
-            sx={{
-              mt: 0.5,
-              wordBreak: "break-word",
-              whiteSpace: "pre-wrap",
-              color: "#000000 !important",
-              textAlign: isOwnMessage ? "right" : "left",
-            }}
+            </span>
+          </div>
+          <div
+            className={`text-sm whitespace-pre-wrap break-words ${
+              isOwnMessage ? "text-right" : "text-left"
+            }`}
           >
             {message.content}
-          </Typography>
-        </Box>
+          </div>
+        </div>
         {isOwnMessage && message.user && (
-          <Avatar src={message.user.picture} sx={{ width: 40, height: 40 }}>
-            {message.user.name?.charAt(0) || "?"}
+          <Avatar className="w-10 h-10">
+            <AvatarImage src={message.user.picture || "/placeholder.svg"} />
+            <AvatarFallback>
+              {message.user.name?.charAt(0) || "?"}
+            </AvatarFallback>
           </Avatar>
         )}
-      </Stack>
-    </Box>
+      </div>
+    </div>
   );
 }
