@@ -51,11 +51,8 @@ export default function RoomsPage() {
         passcode: "",
         capacity: 5,
       });
-      // 作成したルームに自動参加してチャット画面に移動
-      const joinSuccess = await joinRoom(room.id);
-      if (joinSuccess) {
-        router.push(`/rooms/${room.id}`);
-      }
+      // 作成時はサーバー側で作成者は自動参加されるため、直接チャット画面へ遷移
+      router.push(`/rooms/${room.id}`);
     }
   };
 
@@ -186,7 +183,7 @@ export default function RoomsPage() {
             {newRoom.visibility === "passcode" && (
               <TextField
                 label="パスコード"
-                type="password"
+                type="text"
                 value={newRoom.passcode}
                 onChange={(e) =>
                   setNewRoom({ ...newRoom, passcode: e.target.value })
@@ -224,7 +221,7 @@ export default function RoomsPage() {
         <DialogContent>
           <TextField
             label="パスコード"
-            type="password"
+            type="text"
             value={passcode}
             onChange={(e) => setPasscode(e.target.value)}
             fullWidth
