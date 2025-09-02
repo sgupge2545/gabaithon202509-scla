@@ -2,7 +2,16 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { FaPaperPlane, FaArrowLeft, FaUsers, FaPlay } from "react-icons/fa";
+import {
+  FaPaperPlane,
+  FaArrowLeft,
+  FaUsers,
+  FaPlay,
+  FaPlus,
+  FaTrash,
+  FaUpload,
+  FaTimes,
+} from "react-icons/fa";
 import type { Message } from "@/types/message";
 import { useAuth } from "@/contexts/AuthContext";
 import { useRoom } from "@/contexts/RoomContext";
@@ -62,8 +71,103 @@ export default function ChatPage() {
     scrollToBottom();
   }, [messages]);
 
+  const [gameDialogOpen, setGameDialogOpen] = useState(false);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [problems, setProblems] = useState<
+    { content: string; count: number }[]
+  >([{ content: "", count: 10 }]);
+  const [dragActive, setDragActive] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const startGame = () => {
-    console.log("ゲーム開始");
+    setGameDialogOpen(true);
+  };
+
+  const mergeFiles = (existing: File[], incoming: File[]) => {
+    const map = new Map<string, File>();
+    for (const f of existing) {
+      map.set(`${f.name}:${f.size}:${f.lastModified}`, f);
+    }
+    for (const f of incoming) {
+      map.set(`${f.name}:${f.size}:${f.lastModified}`, f);
+    }
+    return Array.from(map.values());
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files ? Array.from(e.target.files) : [];
+    if (files.length === 0) return;
+    setSelectedFiles((prev) => mergeFiles(prev, files));
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const triggerFileSelect = () => {
+    fileInputRef.current?.click();
+  };
+
+  const onDragEnter = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(true);
+  };
+
+  const onDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const onDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+  };
+
+  const onDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+    const files = e.dataTransfer?.files ? Array.from(e.dataTransfer.files) : [];
+    if (files.length === 0) return;
+    setSelectedFiles((prev) => mergeFiles(prev, files));
+  };
+
+  const removeSelectedFile = (index: number) => {
+    setSelectedFiles((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const addProblemRow = () => {
+    setProblems((prev) => [...prev, { content: "", count: 10 }]);
+  };
+
+  const removeProblemRow = (index: number) => {
+    setProblems((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const updateProblemContent = (index: number, value: string) => {
+    setProblems((prev) => {
+      const next = [...prev];
+      next[index] = { ...next[index], content: value };
+      return next;
+    });
+  };
+
+  const updateProblemCount = (index: number, value: number) => {
+    const safe = Number.isNaN(value) ? 0 : Math.max(0, Math.floor(value));
+    setProblems((prev) => {
+      const next = [...prev];
+      next[index] = { ...next[index], count: safe };
+      return next;
+    });
+  };
+
+  const confirmStartGame = () => {
+    // TODO: 実際の開始処理（API/WS連携など）を実装
+    console.log(
+      "選択ファイル:",
+      selectedFiles.map((f) => f.name)
+    );
+    console.log("出題設定:", problems);
+    setGameDialogOpen(false);
   };
 
   const handleBack = async () => {
@@ -129,6 +233,171 @@ export default function ChatPage() {
           </div>
         </CardContent>
       </Card>
+
+      {gameDialogOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div
+            className="absolute inset-0 bg-black/50"
+            onClick={() => setGameDialogOpen(false)}
+          />
+          <Card className="relative z-10 w-full max-w-xl">
+            <CardContent className="p-6 space-y-6">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold">ゲーム設定</h2>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setGameDialogOpen(false)}
+                >
+                  閉じる
+                </Button>
+              </div>
+
+              <div className="space-y-2">
+                <span className="text-sm font-medium">資料を選択</span>
+                <div
+                  className={`rounded-lg border-2 border-dashed p-6 text-center transition-colors ${
+                    dragActive
+                      ? "border-blue-500 bg-blue-50 dark:bg-blue-950/30"
+                      : "border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800/50"
+                  }`}
+                  onDragEnter={onDragEnter}
+                  onDragOver={onDragOver}
+                  onDragLeave={onDragLeave}
+                  onDrop={onDrop}
+                >
+                  <div className="flex flex-col items-center gap-2">
+                    <FaUpload className="h-6 w-6 text-slate-500" />
+                    <p className="text-sm text-slate-600 dark:text-slate-400">
+                      クリックまたはドラッグ＆ドロップでファイルを追加
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={triggerFileSelect}
+                      >
+                        ファイルを選択
+                      </Button>
+                      <span className="text-xs text-slate-500">
+                        PDF / 画像 など
+                      </span>
+                    </div>
+                  </div>
+                  <input
+                    ref={fileInputRef}
+                    id="doc-files"
+                    type="file"
+                    multiple
+                    className="hidden"
+                    onChange={handleFileChange}
+                  />
+                </div>
+
+                {selectedFiles.length > 0 && (
+                  <div className="flex flex-wrap gap-2 pt-2">
+                    {selectedFiles.map((file, idx) => (
+                      <span
+                        key={`${file.name}-${file.size}-${file.lastModified}`}
+                        className="inline-flex items-center gap-1 text-xs pl-2 pr-1 py-1 rounded-full bg-slate-200 dark:bg-slate-700"
+                      >
+                        <span
+                          className="truncate max-w-[160px]"
+                          title={file.name}
+                        >
+                          {file.name}
+                        </span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-5 w-5"
+                          onClick={() => removeSelectedFile(idx)}
+                          aria-label="ファイルを削除"
+                        >
+                          <FaTimes className="h-3 w-3" />
+                        </Button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">出題設定</span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={addProblemRow}
+                  >
+                    <FaPlus className="h-3 w-3 mr-1" /> 行を追加
+                  </Button>
+                </div>
+
+                <div className="space-y-2">
+                  {problems.map((p, idx) => (
+                    <div
+                      key={idx}
+                      className="grid grid-cols-12 gap-2 items-center"
+                    >
+                      <div className="col-span-8">
+                        <label htmlFor={`content-${idx}`} className="sr-only">
+                          内容
+                        </label>
+                        <input
+                          id={`content-${idx}`}
+                          className="w-full h-10 rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 text-sm"
+                          value={p.content}
+                          onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                            updateProblemContent(idx, e.target.value)
+                          }
+                          placeholder="例: ネットワークに関する穴埋め問題"
+                        />
+                      </div>
+                      <div className="col-span-3">
+                        <label htmlFor={`count-${idx}`} className="sr-only">
+                          個数
+                        </label>
+                        <input
+                          id={`count-${idx}`}
+                          type="number"
+                          min={0}
+                          className="w-full h-10 rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 text-sm"
+                          value={p.count}
+                          onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                            updateProblemCount(idx, Number(e.target.value))
+                          }
+                          placeholder="10"
+                        />
+                      </div>
+                      <div className="col-span-1 flex justify-end">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => removeProblemRow(idx)}
+                          aria-label="行を削除"
+                        >
+                          <FaTrash className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex justify-end">
+                <Button type="button" onClick={confirmStartGame}>
+                  開始
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       <div className="flex-1 overflow-auto p-2 bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
         <div className="space-y-3">
