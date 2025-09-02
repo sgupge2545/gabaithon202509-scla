@@ -3,6 +3,7 @@
 """
 
 import hashlib
+import logging
 import uuid
 from typing import List, Optional
 
@@ -10,6 +11,8 @@ from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 
 from .models import Room, RoomMember, User
+
+logger = logging.getLogger(__name__)
 
 
 def create_room(
@@ -111,14 +114,29 @@ def join_room(
     # ルーム取得
     room = get_room_by_id(db, room_id)
     if not room:
+        logger.warning(
+            "join_room 失敗: ルームが存在しません room_id=%s user_id=%s",
+            room_id,
+            user_id,
+        )
         return False
 
     # パスコード確認
     if room.visibility == "passcode":
         if not passcode:
+            logger.warning(
+                "join_room 失敗: パスコード未入力 room_id=%s user_id=%s",
+                room_id,
+                user_id,
+            )
             return False
         passcode_hash = hashlib.sha256(passcode.encode()).hexdigest()
         if passcode_hash != room.passcode_hash:
+            logger.warning(
+                "join_room 失敗: パスコード不一致 room_id=%s user_id=%s",
+                room_id,
+                user_id,
+            )
             return False
 
     # 既に参加済みかチェック
@@ -128,7 +146,7 @@ def join_room(
         .first()
     )
     if existing_member:
-        return True  # 冪等性：既に参加済みなら成功扱い
+        return True
 
     # 定員チェック
     current_members = (
@@ -137,6 +155,13 @@ def join_room(
         .scalar()
     )
     if current_members >= room.capacity:
+        logger.warning(
+            "join_room 失敗: 満室 room_id=%s user_id=%s capacity=%s current=%s",
+            room_id,
+            user_id,
+            room.capacity,
+            current_members,
+        )
         return False
 
     # 参加処理
@@ -147,6 +172,9 @@ def join_room(
         return True
     except Exception:
         db.rollback()
+        logger.exception(
+            "join_room 失敗: DBエラー room_id=%s user_id=%s", room_id, user_id
+        )
         return False
 
 

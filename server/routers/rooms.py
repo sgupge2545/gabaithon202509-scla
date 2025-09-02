@@ -2,6 +2,7 @@
 ルーム関連のAPIエンドポイント
 """
 
+import logging
 from typing import List, Optional
 
 from fastapi import (
@@ -15,7 +16,7 @@ from fastapi import (
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session
 
-from ..database import get_db, room_service
+from ..database import get_db, room_service, user_service
 from ..services.collection_manager import manager
 
 
@@ -85,14 +86,39 @@ class JoinRoomRequest(BaseModel):
 
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
-def get_current_user(request: Request) -> dict:
-    """現在のユーザーを取得（セッションから）"""
-    user = request.session.get("user")
-    if not user:
+def get_current_user(request: Request, db: Session) -> dict:
+    """現在のユーザーを取得し、DB上の存在も保証する"""
+    session_user = request.session.get("user")
+    if not session_user:
         raise HTTPException(status_code=401, detail="認証が必要です")
-    return user
+
+    # DB上にユーザーが存在しないケースに備え、idp_idベースでupsert
+    idp_id = session_user.get("idp_id")
+    email = session_user.get("email")
+    name = session_user.get("name")
+    picture_url = session_user.get("picture_url")
+
+    if not idp_id or not email or not name:
+        # 必須情報が欠落しているセッションは無効扱い
+        raise HTTPException(status_code=401, detail="認証が必要です")
+
+    db_user = user_service.create_or_update_user(
+        db=db, idp_id=idp_id, email=email, name=name, picture_url=picture_url
+    )
+
+    # セッションも最新のDBユーザー情報で更新
+    request.session["user"] = {
+        "id": db_user.id,
+        "idp_id": db_user.idp_id,
+        "email": db_user.email,
+        "name": db_user.name,
+        "picture_url": db_user.picture_url,
+    }
+
+    return request.session["user"]
 
 
 @router.post("/create", response_model=RoomResponse)
@@ -102,7 +128,7 @@ async def create_room(
     db: Session = Depends(get_db),
 ):
     """新しいルームを作成"""
-    current_user = get_current_user(request)
+    current_user = get_current_user(request, db)
 
     # パスコード必須チェック
     if room_data.visibility == "passcode" and not room_data.passcode:
@@ -146,7 +172,8 @@ async def create_room(
             pass
 
         return resp
-    except Exception:
+    except Exception as e:
+        logger.exception("/rooms/create でエラーが発生しました")
         raise HTTPException(status_code=500, detail="ルーム作成に失敗しました")
 
 
@@ -179,7 +206,7 @@ async def get_room_detail(
     db: Session = Depends(get_db),
 ):
     """ルーム詳細を取得"""
-    current_user = get_current_user(request)
+    current_user = get_current_user(request, db)
 
     room = room_service.get_room_by_id(db, room_id)
     if not room:
@@ -229,16 +256,25 @@ async def join_room(
     db: Session = Depends(get_db),
 ):
     """ルームに参加"""
-    current_user = get_current_user(request)
+    current_user = get_current_user(request, db)
 
-    success = room_service.join_room(
-        db=db,
-        room_id=room_id,
-        user_id=current_user["id"],
-        passcode=join_data.passcode,
-    )
+    try:
+        success = room_service.join_room(
+            db=db,
+            room_id=room_id,
+            user_id=current_user["id"],
+            passcode=join_data.passcode,
+        )
+    except Exception as e:
+        logger.exception("/rooms/{room_id}/join でエラーが発生しました")
+        raise HTTPException(status_code=500, detail="参加に失敗しました")
 
     if not success:
+        logger.warning(
+            "join_room 失敗: room_id=%s user_id=%s",
+            room_id,
+            current_user["id"],
+        )
         raise HTTPException(
             status_code=400,
             detail="参加に失敗しました（定員超過・パスコード間違い・ルームが存在しません）",
@@ -268,15 +304,22 @@ async def leave_room(
     db: Session = Depends(get_db),
 ):
     """ルームから退出"""
-    current_user = get_current_user(request)
+    current_user = get_current_user(request, db)
 
-    success = room_service.leave_room(
-        db=db,
-        room_id=room_id,
-        user_id=current_user["id"],
-    )
+    try:
+        success = room_service.leave_room(
+            db=db,
+            room_id=room_id,
+            user_id=current_user["id"],
+        )
+    except Exception as e:
+        logger.exception("/rooms/{room_id}/leave でエラーが発生しました")
+        raise HTTPException(status_code=500, detail="退出に失敗しました")
 
     if not success:
+        logger.warning(
+            "leave_room 失敗: room_id=%s user_id=%s", room_id, current_user["id"]
+        )
         raise HTTPException(status_code=500, detail="退出に失敗しました")
 
     # check if room still exists; if not, broadcast deletion
@@ -308,15 +351,24 @@ async def delete_room(
     db: Session = Depends(get_db),
 ):
     """ルームを削除（作成者のみ）"""
-    current_user = get_current_user(request)
+    current_user = get_current_user(request, db)
 
-    success = room_service.delete_room(
-        db=db,
-        room_id=room_id,
-        user_id=current_user["id"],
-    )
+    try:
+        success = room_service.delete_room(
+            db=db,
+            room_id=room_id,
+            user_id=current_user["id"],
+        )
+    except Exception as e:
+        logger.exception("/rooms/{room_id} 削除でエラーが発生しました")
+        raise HTTPException(status_code=500, detail="ルーム削除に失敗しました")
 
     if not success:
+        logger.warning(
+            "delete_room 失敗: room_id=%s user_id=%s",
+            room_id,
+            current_user["id"],
+        )
         raise HTTPException(
             status_code=403,
             detail="ルーム削除に失敗しました（権限がないか、ルームが存在しません）",

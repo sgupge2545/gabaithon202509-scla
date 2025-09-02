@@ -2,6 +2,7 @@
 メッセージ関連のAPIエンドポイント
 """
 
+import logging
 from typing import List
 
 from fastapi import (
@@ -15,12 +16,16 @@ from fastapi import (
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from ..database import get_db, room_service
-from ..database.message_service import create_message, get_room_messages
-from ..database.models import User
+from ..database import get_db, room_service, user_service
 from ..services.collection_manager import manager
+from ..services.message_service import (
+    create_message,
+    get_room_messages,
+    redis_client,
+)
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 # レスポンスモデル
@@ -41,12 +46,33 @@ class SendMessageRequest(BaseModel):
     content: str = Field(..., min_length=1, max_length=1000)
 
 
-def get_current_user(request: Request) -> dict:
-    """現在のユーザーを取得（セッションから）"""
-    user = request.session.get("user")
-    if not user:
+def get_current_user(request: Request, db: Session) -> dict:
+    """現在のユーザーを取得し、DB上の存在も保証する"""
+    session_user = request.session.get("user")
+    if not session_user:
         raise HTTPException(status_code=401, detail="認証が必要です")
-    return user
+
+    idp_id = session_user.get("idp_id")
+    email = session_user.get("email")
+    name = session_user.get("name")
+    picture_url = session_user.get("picture_url")
+
+    if not idp_id or not email or not name:
+        raise HTTPException(status_code=401, detail="認証が必要です")
+
+    db_user = user_service.create_or_update_user(
+        db=db, idp_id=idp_id, email=email, name=name, picture_url=picture_url
+    )
+
+    request.session["user"] = {
+        "id": db_user.id,
+        "idp_id": db_user.idp_id,
+        "email": db_user.email,
+        "name": db_user.name,
+        "picture_url": db_user.picture_url,
+    }
+
+    return request.session["user"]
 
 
 @router.get("/{room_id}/messages", response_model=List[MessageResponse])
@@ -58,24 +84,35 @@ async def get_messages(
     offset: int = 0,
 ):
     """ルームのメッセージ一覧を取得"""
-    current_user = get_current_user(request)
+    current_user = get_current_user(request, db)
 
     # ルーム参加チェック
     is_member = room_service.is_user_in_room(db, room_id, current_user["id"])
     if not is_member:
         raise HTTPException(status_code=403, detail="ルームに参加していません")
 
-    messages = get_room_messages(db, room_id, limit, offset)
+    try:
+        messages = get_room_messages(db, room_id, limit, offset)
+    except Exception as e:
+        logger.exception("/rooms/{room_id}/messages 取得でエラーが発生しました")
+        raise HTTPException(status_code=500, detail="メッセージ取得に失敗しました")
 
     result = []
     for message in messages:
         user_info = None
-        if message.user:
-            user_info = {
-                "id": message.user.id,
-                "name": message.user.name,
-                "picture": message.user.picture_url,
-            }
+        try:
+            data = redis_client.hgetall(f"messages:{message.id}")
+            if data:
+                name = data.get("user_name", "")
+                picture = data.get("user_picture", "")
+                if name or picture or message.user_id:
+                    user_info = {
+                        "id": message.user_id,
+                        "name": name,
+                        "picture": picture or None,
+                    }
+        except Exception:
+            pass
 
         result.append(
             MessageResponse(
@@ -111,7 +148,7 @@ async def send_message(
     db: Session = Depends(get_db),
 ):
     """メッセージを送信"""
-    current_user = get_current_user(request)
+    current_user = get_current_user(request, db)
 
     # ルーム参加チェック
     is_member = room_service.is_user_in_room(db, room_id, current_user["id"])
@@ -119,22 +156,31 @@ async def send_message(
         raise HTTPException(status_code=403, detail="ルームに参加していません")
 
     # メッセージ作成
-    message = create_message(
-        db=db,
-        room_id=room_id,
-        user_id=current_user["id"],
-        content=message_data.content,
-    )
+    try:
+        message = create_message(
+            db=db,
+            room_id=room_id,
+            user_id=current_user["id"],
+            content=message_data.content,
+        )
+    except Exception as e:
+        logger.exception("/rooms/{room_id}/messages 送信でエラーが発生しました")
+        raise HTTPException(status_code=500, detail="メッセージ送信に失敗しました")
 
-    # ユーザー情報を取得
-    user = db.query(User).filter(User.id == current_user["id"]).first()
+    # ユーザー情報（スナップショット）をRedisから取得
     user_info = None
-    if user:
-        user_info = {
-            "id": user.id,
-            "name": user.name,
-            "picture": user.picture_url,
-        }
+    try:
+        data = redis_client.hgetall(f"messages:{message.id}")
+        if data:
+            name = data.get("user_name", "")
+            picture = data.get("user_picture", "")
+            user_info = {
+                "id": message.user_id,
+                "name": name,
+                "picture": picture or None,
+            }
+    except Exception:
+        pass
 
     # ブロードキャスト
     payload = {

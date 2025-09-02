@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Redis をデーモンで起動
+redis-server --daemonize yes
+
 # バックグラウンドでFastAPIを起動
 echo "Starting FastAPI server..."
 uvicorn server.main:app --host 0.0.0.0 --port 8000 --reload &

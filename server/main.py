@@ -1,3 +1,4 @@
+import logging
 import os
 
 from fastapi import APIRouter, FastAPI
@@ -15,6 +16,8 @@ app = FastAPI(
     docs_url="/docs",  # Swagger UI
     redoc_url="/redoc",  # ReDoc
 )
+
+logging.basicConfig(level=logging.INFO)
 
 # データベーステーブルを作成
 Base.metadata.create_all(bind=engine)

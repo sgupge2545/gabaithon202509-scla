@@ -1,7 +1,8 @@
+import logging
 import os
 
 from authlib.integrations.starlette_client import OAuth
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -23,6 +24,7 @@ class LogoutResponse(BaseModel):
 
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
 CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
@@ -42,64 +44,76 @@ oauth.register(
 
 @router.get("/login")
 async def login(request: Request):
-    request.session.clear()
-    # 開発環境用のリダイレクトURI
-    redirect_uri = str(request.base_url) + "api/auth/callback"
-    return await oauth.google.authorize_redirect(
-        request,
-        redirect_uri,
-        prompt="select_account",
-    )
+    try:
+        request.session.clear()
+        redirect_uri = str(request.base_url) + "api/auth/callback"
+        return await oauth.google.authorize_redirect(
+            request,
+            redirect_uri,
+            prompt="select_account",
+        )
+    except Exception:
+        logger.exception("/auth/login でエラーが発生しました")
+        raise HTTPException(status_code=500, detail="ログイン開始に失敗しました")
 
 
 @router.get("/callback")
 async def auth_callback(request: Request, db: Session = Depends(get_db)):
-    token = await oauth.google.authorize_access_token(request)
-    userinfo = token.get("userinfo")
-    if not userinfo:
-        userinfo = await oauth.google.userinfo(token=token)
+    try:
+        token = await oauth.google.authorize_access_token(request)
+        userinfo = token.get("userinfo")
+        if not userinfo:
+            userinfo = await oauth.google.userinfo(token=token)
 
-    # Googleから取得したユーザー情報
-    idp_id = userinfo["sub"]
-    email = userinfo.get("email")
-    name = userinfo.get("name", "")
-    picture_url = userinfo.get("picture")
+        idp_id = userinfo["sub"]
+        email = userinfo.get("email")
+        name = userinfo.get("name", "")
+        picture_url = userinfo.get("picture")
 
-    # データベースにユーザー情報を保存または更新
-    db_user = user_service.create_or_update_user(
-        db=db, idp_id=idp_id, email=email, name=name, picture_url=picture_url
-    )
+        db_user = user_service.create_or_update_user(
+            db=db, idp_id=idp_id, email=email, name=name, picture_url=picture_url
+        )
 
-    # セッションにユーザー情報を保存
-    request.session["user"] = {
-        "id": db_user.id,
-        "idp_id": db_user.idp_id,
-        "email": db_user.email,
-        "name": db_user.name,
-        "picture_url": db_user.picture_url,
-    }
-    return RedirectResponse(url=FRONTEND_URL)
+        request.session["user"] = {
+            "id": db_user.id,
+            "idp_id": db_user.idp_id,
+            "email": db_user.email,
+            "name": db_user.name,
+            "picture_url": db_user.picture_url,
+        }
+        return RedirectResponse(url=FRONTEND_URL)
+    except Exception:
+        logger.exception("/auth/callback でエラーが発生しました")
+        raise HTTPException(status_code=500, detail="認証処理に失敗しました")
 
 
 @router.get("/me", response_model=UserResponse)
 async def me(request: Request):
-    user = request.session.get("user")
-    if not user:
-        return RedirectResponse(url="/api/auth/login")
+    try:
+        user = request.session.get("user")
+        if not user:
+            return RedirectResponse(url="/api/auth/login")
 
-    if "idp_id" in user:
-        return UserResponse(
-            id=user["id"],
-            sub=user["idp_id"],
-            email=user["email"],
-            name=user["name"],
-            picture=user["picture_url"],
-        )
-    else:
-        return UserResponse(**user)
+        if "idp_id" in user:
+            return UserResponse(
+                id=user["id"],
+                sub=user["idp_id"],
+                email=user["email"],
+                name=user["name"],
+                picture=user["picture_url"],
+            )
+        else:
+            return UserResponse(**user)
+    except Exception:
+        logger.exception("/auth/me でエラーが発生しました")
+        raise HTTPException(status_code=500, detail="ユーザー情報の取得に失敗しました")
 
 
 @router.post("/logout", response_model=LogoutResponse)
 async def logout(request: Request):
-    request.session.clear()
-    return {"ok": True}
+    try:
+        request.session.clear()
+        return {"ok": True}
+    except Exception:
+        logger.exception("/auth/logout でエラーが発生しました")
+        raise HTTPException(status_code=500, detail="ログアウトに失敗しました")
