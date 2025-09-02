@@ -1,6 +1,15 @@
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, Column, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import (
+    CheckConstraint,
+    Column,
+    ForeignKey,
+    Index,
+    Integer,
+    LargeBinary,
+    String,
+    Text,
+)
 from sqlalchemy.orm import relationship
 
 from .database import Base
@@ -18,6 +27,7 @@ class User(Base):
     # リレーション
     room_memberships = relationship("RoomMember", back_populates="user")
     messages = relationship("Message", back_populates="user")
+    docs = relationship("Doc", back_populates="user")
 
 
 class Room(Base):
@@ -85,3 +95,49 @@ class Message(Base):
 
     # インデックス
     __table_args__ = (Index("idx_messages_room_time", "room_id", "created_at"),)
+
+
+class Doc(Base):
+    __tablename__ = "docs"
+
+    id = Column(String, primary_key=True)  # UUID（アプリ側生成）
+    uploaded_by = Column(
+        String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    file_name = Column(Text, nullable=False)
+    mime_type = Column(String, nullable=False)  # 例: 'application/pdf'
+    storage_uri = Column(Text, nullable=False)  # 実体の保存先（パス/URL）
+    created_at = Column(
+        Text, nullable=False, default=lambda: datetime.now().isoformat()
+    )
+
+    # リレーション
+    user = relationship("User", back_populates="docs")
+    chunks = relationship(
+        "DocChunk", back_populates="doc", cascade="all, delete-orphan"
+    )
+
+    __table_args__ = (Index("idx_docs_uploader_time", "uploaded_by", "created_at"),)
+
+
+class DocChunk(Base):
+    __tablename__ = "doc_chunks"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    doc_id = Column(String, ForeignKey("docs.id", ondelete="CASCADE"), nullable=False)
+    chunk_index = Column(Integer, nullable=False)  # 0,1,2,...
+    content = Column(Text, nullable=False)  # チャンク本文
+    embedding = Column(
+        LargeBinary, nullable=True
+    )  # ベクトルは float32[] をBLOB化して保存
+    created_at = Column(
+        Text, nullable=False, default=lambda: datetime.now().isoformat()
+    )
+
+    # リレーション
+    doc = relationship("Doc", back_populates="chunks")
+
+    __table_args__ = (
+        Index("idx_doc_chunks_doc", "doc_id"),
+        Index("uq_doc_chunks_doc_idx", "doc_id", "chunk_index", unique=True),
+    )
