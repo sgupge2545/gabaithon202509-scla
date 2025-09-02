@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { FaPaperPlane, FaArrowLeft, FaUsers } from "react-icons/fa";
+import { FaPaperPlane, FaArrowLeft, FaUsers, FaPlay } from "react-icons/fa";
 import type { Message } from "@/types/message";
 import { useAuth } from "@/contexts/AuthContext";
 import { useRoom } from "@/contexts/RoomContext";
@@ -62,6 +62,10 @@ export default function ChatPage() {
     scrollToBottom();
   }, [messages]);
 
+  const startGame = () => {
+    console.log("ゲーム開始");
+  };
+
   const handleBack = async () => {
     setExiting(true);
     const targetRoomId = currentRoom?.id;
@@ -118,6 +122,10 @@ export default function ChatPage() {
                 )}
               </div>
             </div>
+            <Button onClick={startGame} className="ml-auto">
+              <FaPlay className="h-4 w-4 mr-2" />
+              ゲーム開始
+            </Button>
           </div>
         </CardContent>
       </Card>
