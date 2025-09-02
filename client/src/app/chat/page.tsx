@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { FaPaperPlane, FaArrowLeft, FaUsers } from "react-icons/fa";
 import type { Message } from "@/types/message";
 import { useAuth } from "@/contexts/AuthContext";
@@ -14,68 +14,34 @@ import { Badge } from "@/components/ui/badge";
 import { useRoomSocket } from "@/hooks/useRoomSocket";
 
 export default function ChatPage() {
-  const searchParams = useSearchParams();
   const router = useRouter();
-  const [roomId, setRoomId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
-  const [loading, setLoading] = useState(true);
   const [sendingMessage, setSendingMessage] = useState(false);
-  const [error, setError] = useState<string>("");
+  const [exiting, setExiting] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const { user } = useAuth();
-  const { leaveRoom, setCurrentRoom, currentRoom } = useRoom();
+  const { leaveRoom, currentRoom, initialized } = useRoom();
 
-  // 初期 roomId: クエリ ＞ sessionStorage
-  useEffect(() => {
-    const q = searchParams.get("room_id");
-    const stored =
-      typeof window !== "undefined" ? sessionStorage.getItem("room_id") : null;
-    const id = q || stored;
-
-    if (!id) {
-      setLoading(false);
-      return;
-    }
-
-    setRoomId(id);
-    try {
-      sessionStorage.setItem("room_id", id);
-    } catch (e) {
-      // ignore storage errors
-    }
-
-    // RoomContext 経由でルーム情報を取得
-    (async () => {
-      setLoading(true);
-      try {
-        await setCurrentRoom(id);
-      } catch (e) {
-        setError("ルーム情報の取得に失敗しました");
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, [searchParams, setCurrentRoom]);
+  // 初期ロードは RoomContext の復元完了を待つ
 
   // WebSocket + initial load handled by hook
   const { messages: socketMessages, sendMessage: sendMessageHook } =
-    useRoomSocket(roomId || "");
+    useRoomSocket(currentRoom?.id || "");
 
   useEffect(() => {
     setMessages(socketMessages);
   }, [socketMessages]);
 
   const sendMessage = async () => {
-    if (!newMessage.trim() || sendingMessage || !roomId) return;
+    if (!newMessage.trim() || sendingMessage || !currentRoom?.id) return;
 
     setSendingMessage(true);
     try {
       await sendMessageHook(newMessage);
       setNewMessage("");
-    } catch (e) {
-      // ignore
+    } catch {
     } finally {
       setSendingMessage(false);
     }
@@ -97,22 +63,17 @@ export default function ChatPage() {
   }, [messages]);
 
   const handleBack = async () => {
-    if (roomId) {
-      try {
-        await leaveRoom(roomId);
-      } catch (e) {
-        // ignore
-      }
-    }
-    try {
-      sessionStorage.removeItem("room_id");
-    } catch (e) {
-      // ignore
-    }
+    setExiting(true);
+    const targetRoomId = currentRoom?.id;
     router.push("/rooms");
+    if (targetRoomId) {
+      try {
+        await leaveRoom(targetRoomId);
+      } catch {}
+    }
   };
 
-  if (loading) {
+  if (!initialized || exiting) {
     return (
       <div className="flex justify-center items-center h-screen">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
@@ -120,11 +81,11 @@ export default function ChatPage() {
     );
   }
 
-  if (error || !currentRoom) {
+  if (!currentRoom) {
     return (
       <div className="flex justify-center items-center h-screen flex-col">
         <h2 className="text-xl font-semibold text-destructive mb-4">
-          {error || "ルームが見つかりません"}
+          {"ルームが見つかりません"}
         </h2>
         <Button onClick={handleBack}>ルーム一覧に戻る</Button>
       </div>

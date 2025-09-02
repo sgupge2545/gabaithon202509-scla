@@ -25,7 +25,7 @@ import { Room, CreateRoomData } from "@/types/room";
 import { useRouter } from "next/navigation";
 
 export default function RoomsPage() {
-  const { publicRooms, loading, createRoom, joinRoom } = useRoom();
+  const { publicRooms, createRoom, joinRoom, setCurrentRoom } = useRoom();
   const router = useRouter();
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [joinDialogOpen, setJoinDialogOpen] = useState(false);
@@ -44,6 +44,7 @@ export default function RoomsPage() {
 
     const room = await createRoom(newRoom);
     if (room) {
+      await setCurrentRoom(room.id);
       setCreateDialogOpen(false);
       setNewRoom({
         title: "",
@@ -51,8 +52,7 @@ export default function RoomsPage() {
         passcode: "",
         capacity: 5,
       });
-      // 作成時はサーバー側で作成者は自動参加されるため、クエリ形式でチャット画面へ遷移
-      router.push(`/chat?room_id=${room.id}`);
+      router.push(`/chat`);
     }
   };
 
@@ -63,7 +63,7 @@ export default function RoomsPage() {
     } else {
       const success = await joinRoom(room.id);
       if (success) {
-        router.push(`/chat?room_id=${room.id}`);
+        router.push(`/chat`);
       }
     }
   };
@@ -71,7 +71,7 @@ export default function RoomsPage() {
   const handleJoinWithPasscode = async () => {
     const success = await joinRoom(selectedRoomId, { passcode });
     if (success) {
-      router.push(`/chat?room_id=${selectedRoomId}`);
+      router.push(`/chat`);
       setJoinDialogOpen(false);
       setPasscode("");
       setSelectedRoomId("");

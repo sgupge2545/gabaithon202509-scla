@@ -10,6 +10,11 @@ export type RoomsEvent =
 
 export function useRoomsSocket(onEvent?: (ev: RoomsEvent) => void) {
   const wsRef = useRef<WebSocket | null>(null);
+  const onEventRef = useRef<((ev: RoomsEvent) => void) | undefined>(onEvent);
+
+  useEffect(() => {
+    onEventRef.current = onEvent;
+  }, [onEvent]);
 
   useEffect(() => {
     const protocol = window.location.protocol === "https:" ? "wss" : "ws";
@@ -22,7 +27,7 @@ export function useRoomsSocket(onEvent?: (ev: RoomsEvent) => void) {
     ws.onmessage = (ev) => {
       try {
         const payload = JSON.parse(ev.data) as RoomsEvent;
-        if (onEvent) onEvent(payload);
+        if (onEventRef.current) onEventRef.current(payload);
       } catch (e) {
         // ignore
       }
@@ -40,5 +45,5 @@ export function useRoomsSocket(onEvent?: (ev: RoomsEvent) => void) {
       }
       if (wsRef.current === ws) wsRef.current = null;
     };
-  }, [onEvent]);
+  }, []);
 }

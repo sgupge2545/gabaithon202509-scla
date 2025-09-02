@@ -11,6 +11,7 @@ interface RoomContextType {
   currentRoom: Room | null;
   selectedRoom: Room | null;
   loading: boolean;
+  initialized: boolean;
 
   // アクション
   fetchPublicRooms: () => Promise<void>;
@@ -42,6 +43,7 @@ export function RoomProvider({ children }: RoomProviderProps) {
   const [currentRoom, setCurrentRoomState] = useState<Room | null>(null);
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
   const [loading, setLoading] = useState(false);
+  const [initialized, setInitialized] = useState(false);
 
   const roomApi = useRoomApi();
 
@@ -59,12 +61,15 @@ export function RoomProvider({ children }: RoomProviderProps) {
     const { data } = await roomApi.createRoom(roomData);
 
     if (data) {
-      // 新しいルームを一覧に追加（公開・パスコード付き両方）
-      setPublicRooms((prev) =>
-        data.visibility === "public" || data.visibility === "passcode"
-          ? [data, ...prev]
-          : prev
-      );
+      setPublicRooms((prev) => {
+        if (!(data.visibility === "public" || data.visibility === "passcode")) {
+          return prev;
+        }
+        if (prev.some((r) => r.id === data.id)) {
+          return prev;
+        }
+        return [data, ...prev];
+      });
     }
 
     setLoading(false);
@@ -98,6 +103,9 @@ export function RoomProvider({ children }: RoomProviderProps) {
       if (currentRoom?.id === roomId) {
         setCurrentRoomState(null);
       }
+      try {
+        localStorage.removeItem("currentRoomId");
+      } catch {}
       // 公開ルーム一覧を更新
       await fetchPublicRooms();
       return true;
@@ -111,12 +119,18 @@ export function RoomProvider({ children }: RoomProviderProps) {
     const { data } = await roomApi.getRoomDetail(roomId);
     if (data) {
       setCurrentRoomState(data);
+      try {
+        localStorage.setItem("currentRoomId", roomId);
+      } catch {}
     }
     setLoading(false);
   };
 
   const clearCurrentRoom = () => {
     setCurrentRoomState(null);
+    try {
+      localStorage.removeItem("currentRoomId");
+    } catch {}
   };
 
   const selectRoom = (room: Room) => {
@@ -132,13 +146,35 @@ export function RoomProvider({ children }: RoomProviderProps) {
     fetchPublicRooms();
   }, []);
 
+  // リロード時に直前のルームを復元
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const saved = localStorage.getItem("currentRoomId");
+        if (saved) {
+          await setCurrentRoom(saved);
+        }
+      } catch {}
+      if (!cancelled) setInitialized(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   // リアルタイム更新の購読
   useRoomsSocket((ev: RoomsEvent) => {
     if (!ev) return;
     if (ev.type === "room_created") {
       const room = ev.room as Room;
       if (room.visibility === "public" || room.visibility === "passcode") {
-        setPublicRooms((prev) => [room, ...prev]);
+        setPublicRooms((prev) => {
+          if (prev.some((r) => r.id === room.id)) {
+            return prev;
+          }
+          return [room, ...prev];
+        });
       }
     } else if (ev.type === "room_updated") {
       const updated = ev.room;
@@ -157,6 +193,7 @@ export function RoomProvider({ children }: RoomProviderProps) {
     currentRoom,
     selectedRoom,
     loading,
+    initialized,
     fetchPublicRooms,
     createRoom,
     joinRoom,
