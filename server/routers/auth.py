@@ -29,6 +29,7 @@ logger = logging.getLogger(__name__)
 CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
 CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
 FRONTEND_URL = os.getenv("FRONTEND_URL")
+BACKEND_URL = os.getenv("BACKEND_URL")
 
 oauth = OAuth()
 oauth.register(
@@ -46,11 +47,9 @@ oauth.register(
 async def login(request: Request):
     try:
         request.session.clear()
-        redirect_uri = str(request.base_url) + "api/auth/callback"
+        redirect_uri = f"{BACKEND_URL}/api/auth/callback"
         return await oauth.google.authorize_redirect(
-            request,
-            redirect_uri,
-            prompt="select_account",
+            request, redirect_uri, prompt="select_account"
         )
     except Exception:
         logger.exception("/auth/login でエラーが発生しました")
