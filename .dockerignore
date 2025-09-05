@@ -1,0 +1,54 @@
+# Git関連
+.git
+.gitignore
+
+# Node.js
+node_modules
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+.coverage
+.pytest_cache
+.tox
+.nox
+
+# IDEとエディタ
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# OS関連
+.DS_Store
+Thumbs.db
+
+# ログファイル
+*.log
+
+# データベース（開発時）
+*.db
+*.sqlite
+*.sqlite3
+
+# 環境設定（本番用は別途管理）
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Next.js
+.next
+out
+
+# 一時ファイル
+tmp
+temp

@@ -1,0 +1,35 @@
+## Builder: build Next.js static output
+FROM node:18-alpine AS builder
+WORKDIR /app/client
+
+# Copy only package files first for caching
+COPY client/package*.json ./
+RUN npm ci --prefer-offline --no-audit --no-fund
+
+# Copy client sources and build
+COPY client/ ./
+ENV NODE_ENV=production
+RUN npm run build
+
+## Runtime: minimal Python image with only server and built static files
+FROM python:3.11-slim
+WORKDIR /app
+
+# Install minimal OS deps required by the app
+RUN apt-get update \
+    && apt-get install -y sqlite3 libsqlite3-dev redis-server \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python deps
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy server code only
+COPY server ./server
+
+# Copy built static files from builder stage (only client/out)
+COPY --from=builder /app/client/out ./client/out
+
+# Expose and run
+EXPOSE 8080
+CMD ["/bin/sh", "-c", "redis-server --daemonize yes && uvicorn server.main:app --host 0.0.0.0 --port 8080"]

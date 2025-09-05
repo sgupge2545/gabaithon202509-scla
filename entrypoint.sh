@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Redis をデーモンで起動
+redis-server --daemonize yes
+
 # バックグラウンドでFastAPIを起動
 echo "Starting FastAPI server..."
 uvicorn server.main:app --host 0.0.0.0 --port 8000 --reload &
@@ -7,7 +10,7 @@ uvicorn server.main:app --host 0.0.0.0 --port 8000 --reload &
 # クライアントディレクトリに移動してNext.jsを起動
 echo "Starting Next.js server..."
 cd client
-pnpm dev &
+npm run dev &
 
 # 両方のプロセスを待機
 wait

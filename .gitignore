@@ -1,2 +1,4 @@
 __pycache__/
 .env
+data/
+client/openapi.json
