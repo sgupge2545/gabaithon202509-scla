@@ -80,8 +80,85 @@ export default function ChatPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [startingGame, setStartingGame] = useState(false);
 
+  // 資料選択方式の状態管理
+  const [documentSource, setDocumentSource] = useState<"new" | "existing">(
+    "existing"
+  );
+  const [userDocuments, setUserDocuments] = useState<
+    {
+      id: string;
+      filename: string;
+      mime_type: string;
+      created_at: string;
+      chunk_count: number;
+      preview: string;
+    }[]
+  >([]);
+  const [selectedDocIds, setSelectedDocIds] = useState<string[]>([]);
+  const [loadingDocuments, setLoadingDocuments] = useState(false);
+
+  // 資料選択方式が変更されたときに既存資料を取得
+  useEffect(() => {
+    if (documentSource === "existing" && gameDialogOpen) {
+      fetchUserDocuments();
+    }
+  }, [documentSource, gameDialogOpen]);
+
   const startGame = () => {
     setGameDialogOpen(true);
+    // ダイアログを開いたときに既存資料を取得
+    if (documentSource === "existing") {
+      fetchUserDocuments();
+    }
+  };
+
+  const fetchUserDocuments = async () => {
+    setLoadingDocuments(true);
+    try {
+      const base = process.env.NEXT_PUBLIC_API_BASE_URL || "";
+      const res = await fetch(`${base}/api/docs/my-documents`, {
+        method: "GET",
+        credentials: "include",
+        headers: { Accept: "application/json" },
+      });
+
+      if (!res.ok) {
+        throw new Error(`Failed to fetch documents: ${res.status}`);
+      }
+
+      const data = (await res.json()) as {
+        documents: {
+          id: string;
+          filename: string;
+          mime_type: string;
+          created_at: string;
+          chunk_count: number;
+          preview: string;
+        }[];
+      };
+      setUserDocuments(data.documents || []);
+    } catch (err) {
+      console.error("ドキュメント取得エラー:", err);
+      setUserDocuments([]);
+    } finally {
+      setLoadingDocuments(false);
+    }
+  };
+
+  const toggleDocumentSelection = (docId: string) => {
+    setSelectedDocIds((prev) =>
+      prev.includes(docId)
+        ? prev.filter((id) => id !== docId)
+        : [...prev, docId]
+    );
+  };
+
+  const selectAllDocuments = () => {
+    setSelectedDocIds(userDocuments.map((doc) => doc.id));
+  };
+
+  const clearDocumentSelection = () => {
+    setSelectedDocIds([]);
   };
 
   const mergeFiles = (existing: File[], incoming: File[]) => {
@@ -274,74 +351,207 @@ export default function ChatPage() {
                 </Button>
               </div>
 
-              <div className="space-y-2">
+              <div className="space-y-4">
                 <span className="text-sm font-medium">資料を選択</span>
-                <div
-                  className={`rounded-lg border-2 border-dashed p-6 text-center transition-colors ${
-                    dragActive
-                      ? "border-blue-500 bg-blue-50 dark:bg-blue-950/30"
-                      : "border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800/50"
-                  }`}
-                  onDragEnter={onDragEnter}
-                  onDragOver={onDragOver}
-                  onDragLeave={onDragLeave}
-                  onDrop={onDrop}
-                >
-                  <div className="flex flex-col items-center gap-2">
-                    <FaUpload className="h-6 w-6 text-slate-500" />
-                    <p className="text-sm text-slate-600 dark:text-slate-400">
-                      クリックまたはドラッグ＆ドロップでファイルを追加
-                    </p>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={triggerFileSelect}
-                      >
-                        ファイルを選択
-                      </Button>
-                      <span className="text-xs text-slate-500">
-                        PDF / 画像 など
-                      </span>
-                    </div>
-                  </div>
-                  <input
-                    ref={fileInputRef}
-                    id="doc-files"
-                    type="file"
-                    multiple
-                    className="hidden"
-                    onChange={handleFileChange}
-                  />
+
+                {/* 資料選択方式のラジオボタン */}
+                <div className="flex space-x-4">
+                  <label className="flex items-center cursor-pointer">
+                    <input
+                      type="radio"
+                      value="existing"
+                      checked={documentSource === "existing"}
+                      onChange={(e) =>
+                        setDocumentSource(e.target.value as "existing")
+                      }
+                      className="mr-2"
+                    />
+                    <span className="text-sm">過去の資料から選択</span>
+                  </label>
+                  <label className="flex items-center cursor-pointer">
+                    <input
+                      type="radio"
+                      value="new"
+                      checked={documentSource === "new"}
+                      onChange={(e) =>
+                        setDocumentSource(e.target.value as "new")
+                      }
+                      className="mr-2"
+                    />
+                    <span className="text-sm">新しい資料をアップロード</span>
+                  </label>
                 </div>
 
-                {selectedFiles.length > 0 && (
-                  <div className="flex flex-wrap gap-2 pt-2">
-                    {selectedFiles.map((file, idx) => (
-                      <span
-                        key={`${file.name}-${file.size}-${file.lastModified}`}
-                        className="inline-flex items-center gap-1 text-xs pl-2 pr-1 py-1 rounded-full bg-slate-200 dark:bg-slate-700"
-                      >
-                        <span
-                          className="truncate max-w-[160px]"
-                          title={file.name}
-                        >
-                          {file.name}
-                        </span>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-5 w-5"
-                          onClick={() => removeSelectedFile(idx)}
-                          aria-label="ファイルを削除"
-                        >
-                          <FaTimes className="h-3 w-3" />
-                        </Button>
-                      </span>
-                    ))}
+                {/* 既存資料選択 */}
+                {documentSource === "existing" && (
+                  <div className="space-y-3">
+                    {loadingDocuments ? (
+                      <div className="text-center py-4">
+                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500 mx-auto"></div>
+                        <p className="text-sm text-slate-600 mt-2">
+                          資料を読み込み中...
+                        </p>
+                      </div>
+                    ) : userDocuments.length > 0 ? (
+                      <>
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs text-slate-600">
+                            📁 過去にアップロードした資料 (
+                            {userDocuments.length}件)
+                          </span>
+                          <div className="flex gap-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={selectAllDocuments}
+                              className="text-xs"
+                            >
+                              すべて選択
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={clearDocumentSelection}
+                              className="text-xs"
+                            >
+                              選択解除
+                            </Button>
+                          </div>
+                        </div>
+
+                        <div className="max-h-48 overflow-y-auto border rounded-lg">
+                          {userDocuments.map((doc) => (
+                            <div
+                              key={doc.id}
+                              className="p-3 border-b last:border-b-0 hover:bg-slate-50 dark:hover:bg-slate-800"
+                            >
+                              <label className="flex items-start space-x-3 cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedDocIds.includes(doc.id)}
+                                  onChange={() =>
+                                    toggleDocumentSelection(doc.id)
+                                  }
+                                  className="mt-1"
+                                />
+                                <div className="flex-1 min-w-0">
+                                  <div className="font-medium text-sm truncate">
+                                    {doc.filename}
+                                  </div>
+                                  <div className="text-xs text-slate-500 mt-1">
+                                    📅{" "}
+                                    {new Date(
+                                      doc.created_at
+                                    ).toLocaleDateString("ja-JP")}{" "}
+                                    | 📊 {doc.chunk_count}チャンク
+                                  </div>
+                                  {doc.preview && (
+                                    <div className="text-xs text-slate-400 mt-1 truncate">
+                                      {doc.preview}
+                                    </div>
+                                  )}
+                                </div>
+                              </label>
+                            </div>
+                          ))}
+                        </div>
+
+                        {selectedDocIds.length > 0 && (
+                          <div className="p-3 bg-blue-50 dark:bg-blue-950/30 rounded-lg text-sm">
+                            選択中: {selectedDocIds.length}件 (
+                            {userDocuments
+                              .filter((doc) => selectedDocIds.includes(doc.id))
+                              .reduce((sum, doc) => sum + doc.chunk_count, 0)}
+                            チャンク)
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <div className="text-center py-8 text-slate-500">
+                        <p className="text-sm">
+                          過去にアップロードした資料がありません
+                        </p>
+                        <p className="text-xs mt-1">
+                          新しい資料をアップロードしてください
+                        </p>
+                      </div>
+                    )}
                   </div>
+                )}
+
+                {/* 新規ファイルアップロード */}
+                {documentSource === "new" && (
+                  <>
+                    <div
+                      className={`rounded-lg border-2 border-dashed p-6 text-center transition-colors ${
+                        dragActive
+                          ? "border-blue-500 bg-blue-50 dark:bg-blue-950/30"
+                          : "border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800/50"
+                      }`}
+                      onDragEnter={onDragEnter}
+                      onDragOver={onDragOver}
+                      onDragLeave={onDragLeave}
+                      onDrop={onDrop}
+                    >
+                      <div className="flex flex-col items-center gap-2">
+                        <FaUpload className="h-6 w-6 text-slate-500" />
+                        <p className="text-sm text-slate-600 dark:text-slate-400">
+                          クリックまたはドラッグ＆ドロップでファイルを追加
+                        </p>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={triggerFileSelect}
+                          >
+                            ファイルを選択
+                          </Button>
+                          <span className="text-xs text-slate-500">
+                            PDF / 画像 など
+                          </span>
+                        </div>
+                      </div>
+                      <input
+                        ref={fileInputRef}
+                        id="doc-files"
+                        type="file"
+                        multiple
+                        className="hidden"
+                        onChange={handleFileChange}
+                      />
+                    </div>
+
+                    {selectedFiles.length > 0 && (
+                      <div className="flex flex-wrap gap-2 pt-2">
+                        {selectedFiles.map((file, idx) => (
+                          <span
+                            key={`${file.name}-${file.size}-${file.lastModified}`}
+                            className="inline-flex items-center gap-1 text-xs pl-2 pr-1 py-1 rounded-full bg-slate-200 dark:bg-slate-700"
+                          >
+                            <span
+                              className="truncate max-w-[160px]"
+                              title={file.name}
+                            >
+                              {file.name}
+                            </span>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-5 w-5"
+                              onClick={() => removeSelectedFile(idx)}
+                              aria-label="ファイルを削除"
+                            >
+                              <FaTimes className="h-3 w-3" />
+                            </Button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
 
@@ -414,9 +624,14 @@ export default function ChatPage() {
                 <Button
                   type="button"
                   onClick={confirmStartGame}
-                  disabled={startingGame}
+                  disabled={
+                    startingGame ||
+                    (documentSource === "existing" &&
+                      selectedDocIds.length === 0) ||
+                    (documentSource === "new" && selectedFiles.length === 0)
+                  }
                 >
-                  開始
+                  {startingGame ? "開始中..." : "開始"}
                 </Button>
               </div>
             </CardContent>

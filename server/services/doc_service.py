@@ -139,6 +139,77 @@ def get_all_chunks_with_embeddings(db: Session) -> List[tuple[DocChunk, List[flo
     return result
 
 
+def get_user_documents(
+    db: Session, user_id: str, limit: int = 50, offset: int = 0
+) -> List[dict]:
+    """ユーザーがアップロードしたドキュメント一覧を取得。
+
+    Args:
+        db: データベースセッション
+        user_id: ユーザーID
+        limit: 取得件数の上限
+        offset: オフセット
+
+    Returns:
+        ドキュメント情報の辞書のリスト
+    """
+    docs = (
+        db.query(Doc)
+        .filter(Doc.uploaded_by == user_id)
+        .order_by(Doc.created_at.desc())
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+
+    result = []
+    for doc in docs:
+        # チャンク数を取得
+        chunk_count = db.query(DocChunk).filter(DocChunk.doc_id == doc.id).count()
+
+        # プレビューテキストを取得（最初のチャンク）
+        first_chunk = (
+            db.query(DocChunk)
+            .filter(DocChunk.doc_id == doc.id)
+            .order_by(DocChunk.chunk_index)
+            .first()
+        )
+
+        result.append(
+            {
+                "id": doc.id,
+                "filename": doc.filename,
+                "mime_type": doc.mime_type,
+                "created_at": doc.created_at,
+                "chunk_count": chunk_count,
+                "preview": first_chunk.content[:100] + "..."
+                if first_chunk and first_chunk.content
+                else "",
+            }
+        )
+
+    return result
+
+
+def get_chunks_from_selected_docs(db: Session, doc_ids: List[str]) -> List[DocChunk]:
+    """選択されたドキュメントからすべてのチャンクを取得。
+
+    Args:
+        db: データベースセッション
+        doc_ids: ドキュメントIDのリスト
+
+    Returns:
+        DocChunkオブジェクトのリスト
+    """
+    return (
+        db.query(DocChunk)
+        .filter(DocChunk.doc_id.in_(doc_ids))
+        .filter(DocChunk.embedding.is_not(None))  # embeddingがあるもののみ
+        .order_by(DocChunk.doc_id, DocChunk.chunk_index)
+        .all()
+    )
+
+
 __all__ = [
     "serialize_vector",
     "deserialize_vector",
@@ -146,4 +217,6 @@ __all__ = [
     "get_doc_by_id",
     "get_doc_chunks",
     "get_all_chunks_with_embeddings",
+    "get_user_documents",
+    "get_chunks_from_selected_docs",
 ]

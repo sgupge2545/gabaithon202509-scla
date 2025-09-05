@@ -7,7 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
 from .database import Base, engine
-from .routers import auth, game, messages, rooms
+from .routers import auth, docs, game, messages, rooms
 
 app = FastAPI(
     title="チャットアプリ API",
@@ -65,6 +65,7 @@ app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(rooms.router, prefix="/api/rooms", tags=["rooms"])
 app.include_router(messages.router, prefix="/api/rooms", tags=["messages"])
 app.include_router(game.router, prefix="/api/game", tags=["game"])
+app.include_router(docs.router, prefix="/api/docs", tags=["docs"])
 
 # Serve exported Next.js static files (only if directory exists)
 if os.path.exists("client/out"):
