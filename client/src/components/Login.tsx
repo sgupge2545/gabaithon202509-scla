@@ -5,8 +5,22 @@ import Box from '@mui/material/Box';
 import Paper from '@mui/material/Paper';
 import { FcGoogle } from "react-icons/fc";
 import ChatIcon from '@mui/icons-material/Chat';
-import QuizIcon from '@mui/icons-material/Quiz';
-import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
+import AccountCircleIcon from '@mui/icons-material/AccountCircle';
+import PsychologyIcon from '@mui/icons-material/Psychology';
+import AddIcon from '@mui/icons-material/Add';
+import { createTheme } from "@mui/material/styles";
+
+const theme = createTheme({
+  breakpoints: {
+    values: {
+      xs: 0,
+      sm: 768,
+      md: 1024,
+      lg: 1280,
+      xl: 1920,
+    },
+  },
+});
 
 export default function Login() {
   return (
@@ -41,7 +55,7 @@ export default function Login() {
       }}
     >
       <Typography 
-        variant="h2" 
+        variant="h3" 
         component="h1" 
         gutterBottom 
         sx={{ 
@@ -50,105 +64,44 @@ export default function Login() {
           background: 'linear-gradient(135deg, #fff 0%, #e0e7ff 50%, #a5b4fc 100%)',
           backgroundClip: 'text',
           WebkitBackgroundClip: 'text',
-          mb: 6,
           textAlign: 'center',
+          mb: 22,
           letterSpacing: '0.1em',
           position: 'relative',
           zIndex: 1,
         }}
       >
-        NEXT GEN LOGIN
-      </Typography>
-      
-      <Typography 
-        variant="h6" 
-        component="p" 
-        sx={{ 
-          color: 'rgba(255,255,255,0.8)',
-          mb: 6,
-          textAlign: 'center',
-          fontWeight: 300,
-          letterSpacing: '0.05em',
-          position: 'relative',
-          zIndex: 1,
-        }}
-      >
-        次世代の認証システムへようこそ
+        アプリ名
       </Typography>
 
       {/* 装飾的なアイコン群 */}
       <Box
         sx={{
           position: 'absolute',
-          top: '15%',
-          left: '10%',
-          zIndex: 0,
-          opacity: 0.6,
-          animation: 'float 6s ease-in-out infinite',
-        }}
-      >
-        <ChatIcon 
-          sx={{ 
-            fontSize: 48, 
-            color: 'rgba(120, 119, 198, 0.8)',
-            filter: 'drop-shadow(0 0 10px rgba(120, 119, 198, 0.5))'
-          }} 
-        />
-      </Box>
-
-      <Box
-        sx={{
-          position: 'absolute',
-          top: '20%',
-          right: '15%',
-          zIndex: 0,
-          opacity: 0.7,
-          animation: 'float 8s ease-in-out infinite reverse',
-        }}
-      >
-        <QuizIcon 
-          sx={{ 
-            fontSize: 56, 
-            color: 'rgba(255, 119, 198, 0.8)',
-            filter: 'drop-shadow(0 0 12px rgba(255, 119, 198, 0.6))'
-          }} 
-        />
-      </Box>
-
-      <Box
-        sx={{
-          position: 'absolute',
-          bottom: '25%',
-          left: '8%',
+          top: { xs: '32%', sm: '28%', md: '28%' },
+          left: '50%',
           zIndex: 0,
           opacity: 0.5,
-          animation: 'float 7s ease-in-out infinite',
-        }}
-      >
-        <AutoAwesomeIcon 
-          sx={{ 
-            fontSize: 40, 
-            color: 'rgba(102, 126, 234, 0.8)',
-            filter: 'drop-shadow(0 0 8px rgba(102, 126, 234, 0.5))'
-          }} 
-        />
-      </Box>
-
-      <Box
-        sx={{
-          position: 'absolute',
-          bottom: '20%',
-          right: '12%',
-          zIndex: 0,
-          opacity: 0.6,
-          animation: 'float 9s ease-in-out infinite reverse',
+          transform: 'translateX(-50%)',
         }}
       >
         <ChatIcon 
           sx={{ 
-            fontSize: 100, 
-            color: 'rgba(166, 180, 252, 0.8)',
-            filter: 'drop-shadow(0 0 10px rgba(166, 180, 252, 0.5))'
+            fontSize: { xs: 60, sm: 80, md: 90 },
+            color: 'rgba(120, 119, 198, 0.8)',  
+          }} 
+        />
+        <AddIcon 
+          sx={{ 
+            fontSize: { xs: 50, sm: 70, md: 80 }, 
+            color: 'white',
+            transform: 'rotate(45deg)'
+          }} 
+        />
+        <PsychologyIcon 
+          sx={{ 
+            fontSize: { xs: 60, sm: 80, md: 90 }, 
+            color: 'rgba(255, 119, 198, 0.8)',
           }} 
         />
       </Box>
@@ -156,7 +109,7 @@ export default function Login() {
       <Paper
         elevation={0}
         sx={{
-          padding: 8,
+          padding: 7,
           borderRadius: '24px',
           minWidth: 400,
           textAlign: 'center',
@@ -168,19 +121,23 @@ export default function Login() {
           boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
         }}
       >
-        <Typography 
-          variant="h5" 
-          component="h2" 
-          gutterBottom 
-          sx={{ 
-            fontWeight: 700, 
-            color: '#fff',
-            mb: 4,
-            letterSpacing: '0.05em'
+        <AccountCircleIcon 
+          sx={{
+            fontSize: 140,
+            color: 'rgba(255,255,255,0.9)',
+            mb: 3,
+            position: 'absolute',
+            top: '-40%',
+            left: '130px',
+            filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.3))',
+            transition: 'all 0.3s ease',
+            '&:hover': {
+              color: 'rgba(255,255,255,1)',
+              transform: 'scale(1.05)',
+              filter: 'drop-shadow(0 6px 12px rgba(0,0,0,0.4))',
+            }
           }}
-        >
-          ログイン
-        </Typography>
+        />
         
         <Button
           variant="contained"
