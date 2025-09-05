@@ -66,5 +66,6 @@ app.include_router(rooms.router, prefix="/api/rooms", tags=["rooms"])
 app.include_router(messages.router, prefix="/api/rooms", tags=["messages"])
 app.include_router(game.router, prefix="/api/game", tags=["game"])
 
-# Serve exported Next.js static files
-app.mount("/", StaticFiles(directory="client/out", html=True), name="static")
+# Serve exported Next.js static files (only if directory exists)
+if os.path.exists("client/out"):
+    app.mount("/", StaticFiles(directory="client/out", html=True), name="static")
