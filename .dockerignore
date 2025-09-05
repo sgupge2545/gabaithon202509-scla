@@ -1,3 +1,14 @@
+**/node_modules/
+**/.next/
+**/dist/
+**/build/
+.git
+.vscode/
+.devcontainer/
+Dockerfile
+docker-compose.yml
+*.log
+
 # Git関連
 .git
 .gitignore
