@@ -17,7 +17,7 @@ WORKDIR /app
 
 # Install minimal OS deps required by the app
 RUN apt-get update \
-    && apt-get install -y sqlite3 libsqlite3-dev redis-server \
+    && apt-get install -y sqlite3 libsqlite3-dev redis-server poppler-utils \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python deps

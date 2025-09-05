@@ -78,6 +78,7 @@ export default function ChatPage() {
   >([{ content: "", count: 10 }]);
   const [dragActive, setDragActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [startingGame, setStartingGame] = useState(false);
 
   const startGame = () => {
     setGameDialogOpen(true);
@@ -160,14 +161,34 @@ export default function ChatPage() {
     });
   };
 
-  const confirmStartGame = () => {
-    // TODO: 実際の開始処理（API/WS連携など）を実装
-    console.log(
-      "選択ファイル:",
-      selectedFiles.map((f) => f.name)
-    );
-    console.log("出題設定:", problems);
-    setGameDialogOpen(false);
+  const confirmStartGame = async () => {
+    try {
+      setStartingGame(true);
+      const form = new FormData();
+      for (const file of selectedFiles) {
+        form.append("files", file, file.name);
+      }
+      // 必要になったら設定情報も送れるように残しておく
+      // form.append("config", JSON.stringify(problems));
+
+      const base = process.env.NEXT_PUBLIC_API_BASE_URL || "";
+      const res = await fetch(`${base}/api/game/start`, {
+        method: "POST",
+        body: form,
+        headers: { Accept: "application/json" },
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`Game start failed: ${res.status} ${text}`);
+      }
+      const data = await res.json();
+      console.log("ゲーム開始API 応答:", data);
+      setGameDialogOpen(false);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setStartingGame(false);
+    }
   };
 
   const handleBack = async () => {
@@ -390,7 +411,11 @@ export default function ChatPage() {
               </div>
 
               <div className="flex justify-end">
-                <Button type="button" onClick={confirmStartGame}>
+                <Button
+                  type="button"
+                  onClick={confirmStartGame}
+                  disabled={startingGame}
+                >
                   開始
                 </Button>
               </div>
