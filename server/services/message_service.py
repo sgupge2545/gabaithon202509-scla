@@ -3,6 +3,7 @@
 """
 
 import os
+import uuid
 from datetime import datetime
 from typing import List
 
@@ -20,7 +21,7 @@ def create_message(db: Session, room_id: str, user_id: str, content: str) -> Mes
     """
     新しいメッセージを作成
     """
-    message_id = int(redis_client.incr("messages:next_id"))
+    message_id = str(uuid.uuid4())
     created_at = datetime.now().isoformat()
 
     key = f"messages:{message_id}"
@@ -32,7 +33,7 @@ def create_message(db: Session, room_id: str, user_id: str, content: str) -> Mes
     redis_client.hset(
         key,
         mapping={
-            "id": str(message_id),
+            "id": message_id,
             "room_id": room_id,
             "user_id": user_id,
             "content": content,
@@ -42,7 +43,7 @@ def create_message(db: Session, room_id: str, user_id: str, content: str) -> Mes
             "user_picture": user_picture,
         },
     )
-    redis_client.lpush(f"room:{room_id}:messages", str(message_id))
+    redis_client.lpush(f"room:{room_id}:messages", message_id)
 
     return Message(
         id=message_id,
@@ -67,7 +68,7 @@ def get_room_messages(
             continue
         messages.append(
             Message(
-                id=int(data.get("id", "0")),
+                id=data.get("id", ""),
                 room_id=data.get("room_id", room_id),
                 user_id=data.get("user_id"),
                 content=data.get("content", ""),
@@ -77,7 +78,7 @@ def get_room_messages(
     return messages
 
 
-def get_message_by_id(db: Session, message_id: int) -> Message | None:
+def get_message_by_id(db: Session, message_id: str) -> Message | None:
     """
     メッセージIDでメッセージを取得
     """
@@ -85,7 +86,7 @@ def get_message_by_id(db: Session, message_id: int) -> Message | None:
     if not data:
         return None
     return Message(
-        id=int(data.get("id", str(message_id))),
+        id=data.get("id", message_id),
         room_id=data.get("room_id", ""),
         user_id=data.get("user_id"),
         content=data.get("content", ""),
@@ -93,7 +94,7 @@ def get_message_by_id(db: Session, message_id: int) -> Message | None:
     )
 
 
-def delete_message(db: Session, message_id: int, user_id: str) -> bool:
+def delete_message(db: Session, message_id: str, user_id: str) -> bool:
     """
     メッセージを削除（送信者のみ可能）
     """
@@ -104,6 +105,6 @@ def delete_message(db: Session, message_id: int, user_id: str) -> bool:
         return False
 
     room_id = data.get("room_id", "")
-    redis_client.lrem(f"room:{room_id}:messages", 1, str(message_id))
+    redis_client.lrem(f"room:{room_id}:messages", 1, message_id)
     redis_client.delete(f"messages:{message_id}")
     return True

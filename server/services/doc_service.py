@@ -67,14 +67,16 @@ def create_doc_with_chunks(
         filename=filename,
         mime_type=mime_type,
         uploaded_by=uploader_id,
+        storage_uri="",
     )
 
     db.add(doc)
-    db.flush()  # IDを取得するためにflush
+    db.flush()
 
     # チャンクを作成
     for chunk_index, (content, embedding) in enumerate(chunks_data):
         chunk = DocChunk(
+            id=str(uuid.uuid4()),
             doc_id=doc.id,
             chunk_index=chunk_index,
             content=content,

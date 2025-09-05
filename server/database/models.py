@@ -81,7 +81,7 @@ class RoomMember(Base):
 class Message(Base):
     __tablename__ = "messages"
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
+    id = Column(String, primary_key=True)
     room_id = Column(String, ForeignKey("rooms.id", ondelete="CASCADE"), nullable=False)
     user_id = Column(String, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     content = Column(Text, nullable=False)
@@ -100,11 +100,11 @@ class Message(Base):
 class Doc(Base):
     __tablename__ = "docs"
 
-    id = Column(String, primary_key=True)  # UUID（アプリ側生成）
+    id = Column(String, primary_key=True)
     uploaded_by = Column(
         String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
-    file_name = Column(Text, nullable=False)
+    filename = Column(Text, nullable=False)
     mime_type = Column(String, nullable=False)  # 例: 'application/pdf'
     storage_uri = Column(Text, nullable=False)  # 実体の保存先（パス/URL）
     created_at = Column(
@@ -123,7 +123,7 @@ class Doc(Base):
 class DocChunk(Base):
     __tablename__ = "doc_chunks"
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
+    id = Column(String, primary_key=True)
     doc_id = Column(String, ForeignKey("docs.id", ondelete="CASCADE"), nullable=False)
     chunk_index = Column(Integer, nullable=False)  # 0,1,2,...
     content = Column(Text, nullable=False)  # チャンク本文

@@ -1,7 +1,7 @@
 import logging
 from typing import Any, Dict, List
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from sqlalchemy.orm import Session
 
 from ..database.database import get_db
@@ -14,7 +14,9 @@ router = APIRouter()
 
 @router.post("/start")
 async def start_game(
-    files: List[UploadFile] = File(default=[]), db: Session = Depends(get_db)
+    request: Request,
+    files: List[UploadFile] = File(default=[]),
+    db: Session = Depends(get_db),
 ) -> Dict[str, Any]:
     """
     ゲーム開始用の簡易API。
@@ -72,6 +74,13 @@ async def start_game(
             doc_id = None
             if texts and embeddings:
                 try:
+                    # セッションからユーザー情報を取得
+                    session_user = request.session.get("user")
+                    if not session_user or not session_user.get("id"):
+                        raise HTTPException(status_code=401, detail="認証が必要です")
+
+                    uploader_id = session_user["id"]
+
                     # チャンクデータを準備（テキストとembeddingのペア）
                     from ..services.embedding import (
                         _merge_small_pages,
@@ -91,7 +100,7 @@ async def start_game(
                         db=db,
                         filename=f.filename or "unknown",
                         mime_type=mime_type,
-                        uploader_id="game_user",  # 仮のユーザーID
+                        uploader_id=uploader_id,
                         chunks_data=chunks_data,
                     )
                     doc_id = doc.id
