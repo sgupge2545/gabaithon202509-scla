@@ -3,7 +3,6 @@
 import React, { useState } from "react";
 import ChatIcon from "@mui/icons-material/Chat";
 import AppBar from "@mui/material/AppBar";
-import { createTheme } from "@mui/material/styles";
 import {
   Box,
   Card,
@@ -28,18 +27,6 @@ import { FaPlus, FaUsers, FaLock } from "react-icons/fa";
 import { useRoom } from "@/contexts/RoomContext";
 import { Room, CreateRoomData } from "@/types/room";
 import { useRouter } from "next/navigation";
-
-const theme = createTheme({
-  breakpoints: {
-    values: {
-      xs: 0,
-      sm: 768,
-      md: 1024,
-      lg: 1280,
-      xl: 1920,
-    },
-  },
-});
 
 export default function RoomsPage() {
   const { publicRooms, createRoom, joinRoom, setCurrentRoom } = useRoom();
