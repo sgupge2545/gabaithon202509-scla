@@ -33,9 +33,5 @@ COPY . .
 
 EXPOSE 8000 3000
 
-# エントリーポイントスクリプトをコピーして実行可能にする
-COPY entrypoint.sh .
-RUN chmod +x entrypoint.sh
-
-# エントリーポイントスクリプトを使用して両方のサーバーを起動
-CMD ["./entrypoint.sh"] 
+# 両方のサーバーを起動するコマンド
+CMD ["bash", "-c", "redis-server --daemonize yes && uvicorn server.main:app --host 0.0.0.0 --port 8000 --reload & cd client && npm run dev & wait"] 
