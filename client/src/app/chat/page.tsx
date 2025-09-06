@@ -54,6 +54,7 @@ export default function ChatPage() {
   // 採点結果を処理するコールバック
   const handleGradingResult = (data: GameEvent) => {
     if (data.message_id && data.result) {
+      // 実際のメッセージIDをキーとして採点結果を保存
       setGradingResults((prev) => ({
         ...prev,
         [data.message_id as string]: data.result as GradingResult,
@@ -82,11 +83,15 @@ export default function ChatPage() {
       currentGameId &&
       user?.id
     ) {
-      const messageId = `answer_${currentGameId}_${gameState.gameStatus.current_question_index}_${user.id}`;
+      // 送信するメッセージのIDを生成（実際のメッセージIDではなく、一意のキー）
+      const tempMessageId = `temp_${Date.now()}_${user.id}`;
       setGradingResults((prev) => ({
         ...prev,
-        [messageId]: { loading: true },
+        [tempMessageId]: { loading: true },
       }));
+
+      // 実際のメッセージ送信後にIDを更新するため、tempMessageIdを保存
+      // この実装では、メッセージ送信成功後にWebSocketで正しいIDが来るまで待つ
     }
 
     try {
@@ -147,6 +152,10 @@ export default function ChatPage() {
   }, [documentSource, gameDialogOpen]);
 
   const startGame = () => {
+    // 前のゲーム状態をリセット
+    setCurrentGameId(null);
+    setGradingResults({});
+
     setGameDialogOpen(true);
     // ダイアログを開いたときに既存資料を取得
     if (documentSource === "existing") {
@@ -454,7 +463,13 @@ export default function ChatPage() {
                   <Badge variant="outline">問題生成中...</Badge>
                 )}
                 {gameState.gameStatus.status === "finished" && (
-                  <Badge variant="secondary">ゲーム終了</Badge>
+                  <div className="flex items-center space-x-2">
+                    <Badge variant="secondary">ゲーム終了</Badge>
+                    <Button onClick={startGame} size="sm" variant="outline">
+                      <FaPlay className="h-4 w-4 mr-2" />
+                      新しいゲーム
+                    </Button>
+                  </div>
                 )}
               </div>
             ) : (
