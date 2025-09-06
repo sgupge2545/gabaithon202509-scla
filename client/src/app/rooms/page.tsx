@@ -2,6 +2,8 @@
 
 import React, { useState } from "react";
 import ChatIcon from '@mui/icons-material/Chat';
+import AppBar from '@mui/material/AppBar';
+import { createTheme } from "@mui/material/styles";
 import {
   Box,
   Card,
@@ -19,12 +21,25 @@ import {
   InputLabel,
   Select,
   MenuItem,
+  useMediaQuery,
+  useTheme
 } from "@mui/material";
 import { FaPlus, FaUsers, FaLock } from "react-icons/fa";
 import { useRoom } from "@/contexts/RoomContext";
 import { Room, CreateRoomData } from "@/types/room";
 import { useRouter } from "next/navigation";
-import { Radius } from "lucide-react";
+
+const theme = createTheme({
+  breakpoints: {
+    values: {
+      xs: 0,
+      sm: 768,
+      md: 1024,
+      lg: 1280,
+      xl: 1920,
+    },
+  },
+});
 
 export default function RoomsPage() {
   const { publicRooms, createRoom, joinRoom, setCurrentRoom } = useRoom();
@@ -33,6 +48,8 @@ export default function RoomsPage() {
   const [joinDialogOpen, setJoinDialogOpen] = useState(false);
   const [selectedRoomId, setSelectedRoomId] = useState<string>("");
   const [passcode, setPasscode] = useState("");
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
   const [newRoom, setNewRoom] = useState<CreateRoomData>({
     title: "",
@@ -88,7 +105,6 @@ export default function RoomsPage() {
         display: 'flex',
         flexDirection: 'column',
         position: 'relative',
-        overflow: 'hidden',
         '&::before': {
           content: '""',
           position: 'absolute',
@@ -101,7 +117,21 @@ export default function RoomsPage() {
         },
       }}
     >
-      <Box sx={{ p: 3, position: 'relative', zIndex: 1 }}>
+      <AppBar
+        sx={{
+          p: { xs: 2.5, sm: 3 }, 
+          position: 'sticky', 
+          top: 0, 
+          left: 0, 
+          width: '100%', 
+          height: { xs: '80px', sm: '100px' },
+          mb: '10px',
+          overflow: 'hidden',
+          background: 'linear-gradient(135deg, #0f0f23 0%, #1a1a2e 100%)', 
+          boxShadow: '0 4px 10px rgba(0, 0, 0, 0.4)', 
+          zIndex: 10, 
+          }}>
+        
         <Stack
           direction="row"
           justifyContent="space-between"
@@ -115,7 +145,7 @@ export default function RoomsPage() {
           >
             <ChatIcon 
               sx={{
-                fontSize: { xs: 40, sm: 48, md: 56 },
+                fontSize: { xs: 30, sm: 48, md: 56 },
                 color: 'rgba(120, 119, 198, 0.8)',
                 filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.3))',
                 transition: 'all 0.3s ease',
@@ -139,12 +169,13 @@ export default function RoomsPage() {
               variant="h4" 
               component="h1"
               sx={{
-                fontWeight: 900,
+                fontWeight: { xs: 700, sm: 900 },
+                fontSize: { xs: '24px', sm: '36px' },
                 color: 'transparent',
                 background: 'linear-gradient(135deg, #fff 0%, #e0e7ff 50%, #a5b4fc 100%)',
                 backgroundClip: 'text',
                 WebkitBackgroundClip: 'text',
-                letterSpacing: '0.1em',
+                letterSpacing: { xs: 0, sm: '0.1em' },
               }}
             >
               チャットルーム
@@ -155,10 +186,11 @@ export default function RoomsPage() {
             startIcon={<FaPlus />}
             onClick={() => setCreateDialogOpen(true)}
             sx={{
-              px: 4,
-              py: 1.5,
+              pl: { xs: 1.5, sm: 4 },
+              py: { xs: 1, sm: 1.5 },
+              pr: { xs: 0, sm: 4 },
               fontWeight: 700,
-              fontSize: '1rem',
+              fontSize: { xs: '0.8rem', sm: '1rem' },
               textTransform: 'none',
               background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
               borderRadius: '16px',
@@ -189,112 +221,114 @@ export default function RoomsPage() {
               }
             }}
           >
-            ルーム作成
+            {!isMobile && "ルーム作成"}
           </Button>
         </Stack>
+      </AppBar>  
 
-        <Stack spacing={2} alignItems='center'>
-          {publicRooms.map((room: Room) => (
-            <Card 
-              key={room.id}
-              elevation={0}
-              sx={{
-                width: '50%',
-
-                background: 'rgba(255,255,255,0.08)',
-                backdropFilter: 'blur(20px)',
-                border: '1px solid rgba(255,255,255,0.1)',
-                borderRadius: '20px',
-                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
-                transition: 'all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
-                '&:hover': {
-                  transform: 'translateY(-8px) scale(1.02)',
-                  boxShadow: '0 35px 60px -12px rgba(0, 0, 0, 0.6)',
-                  background: 'rgba(255,255,255,0.12)',
-                }
-              }}
-            >
-              <CardContent>
-                <Stack
-                  direction="row"
-                  justifyContent="space-between"
-                  alignItems="center"
-                >
-                  <Box>
-                    <Typography 
-                      variant="h6" 
-                      component="h2"
-                      sx={{
-                        color: 'rgba(255,255,255,0.9)',
-                        fontWeight: 600,
-                        mb: 1,
-                      }}
-                    >
-                      {room.title}
-                    </Typography>
-                    <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
-                      <Chip
-                        icon={<FaUsers />}
-                        label={`${room.members?.length || 0}/${room.capacity}`}
-                        size="small"
-                        sx={{
-                          background: 'rgba(120, 119, 198, 0.2)',
-                          color: 'rgba(255,255,255,0.9)',
-                          border: '1px solid rgba(120, 119, 198, 0.3)',
-                        }}
-                      />
-                      {room.visibility === "passcode" && (
-                        <Chip
-                          icon={<FaLock />}
-                          label="パスコード"
-                          size="small"
-                          sx={{
-                            background: 'rgba(255, 119, 198, 0.2)',
-                            color: 'rgba(255,255,255,0.9)',
-                            border: '1px solid rgba(255, 119, 198, 0.3)',
-                          }}
-                        />
-                      )}
-                    </Stack>
-                  </Box>
-                  <Button
-                    variant="outlined"
-                    onClick={() =>
-                      handleJoinRoom(room, room.visibility === "passcode")
-                    }
-                    disabled={(room.members?.length || 0) >= room.capacity}
+      <Stack spacing={2} alignItems='center'>
+        {publicRooms.map((room: Room) => (
+          <Card 
+            key={room.id}
+            elevation={0}
+            sx={{
+              width: { xs: '85%', sm: '70%', md: '50%' },
+              background: 'rgba(255,255,255,0.08)',
+              backdropFilter: 'blur(20px)',
+              border: '1px solid rgba(255,255,255,0.1)',
+              borderRadius: '20px',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+              transition: 'all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+              '&:hover': {
+                transform: 'translateY(-8px) scale(1.02)',
+                boxShadow: '0 35px 60px -12px rgba(0, 0, 0, 0.6)',
+                background: 'rgba(255,255,255,0.12)',
+              }
+            }}
+          >
+            <CardContent>
+              <Stack
+                direction="row"
+                justifyContent="space-between"
+                alignItems="center"
+              >
+                <Box>
+                  <Typography 
+                    variant="h6" 
+                    component="h2"
                     sx={{
-                      px: 3,
-                      py: 1,
-                      fontWeight: 600,
-                      textTransform: 'none',
-                      borderRadius: '12px',
-                      border: '1px solid rgba(255,255,255,0.3)',
                       color: 'rgba(255,255,255,0.9)',
-                      background: 'rgba(255,255,255,0.05)',
-                      transition: 'all 0.3s ease',
-                      '&:hover': {
-                        background: 'rgba(255,255,255,0.1)',
-                        border: '1px solid rgba(255,255,255,0.5)',
-                        transform: 'translateY(-2px)',
-                      },
-                      '&:disabled': {
-                        background: 'rgba(255,255,255,0.05)',
-                        color: 'rgba(255,255,255,0.3)',
-                        border: '1px solid rgba(255,255,255,0.1)',
-                      }
+                      fontWeight: 500,
+                      fontSize: { xs: '16px', sm: '24px' },
+                      mb: 1,
+                      ml: 1
                     }}
                   >
-                    {(room.members?.length || 0) >= room.capacity
-                      ? "満室"
-                      : "参加"}
-                  </Button>
-                </Stack>
-              </CardContent>
-            </Card>
-          ))}
-        </Stack>
-      </Box>
+                    {room.title}
+                  </Typography>
+                  <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
+                    <Chip
+                      icon={<FaUsers />}
+                      label={`${room.members?.length || 0}/${room.capacity}`}
+                      size="medium"
+                      sx={{
+                        background: 'rgba(120, 119, 198, 0.2)',
+                        color: 'rgba(255,255,255,0.9)',
+                        border: '1px solid rgba(120, 119, 198, 0.3)',
+                      }}
+                    />
+                    {room.visibility === "passcode" && (
+                      <Chip
+                        icon={<FaLock />}
+                        label="パスコード"
+                        size="small"
+                        sx={{
+                          background: 'rgba(255, 119, 198, 0.2)',
+                          color: 'rgba(255,255,255,0.9)',
+                          border: '1px solid rgba(255, 119, 198, 0.3)',
+                        }}
+                      />
+                    )}
+                  </Stack>
+                </Box>
+                <Button
+                  variant="outlined"
+                  onClick={() =>
+                    handleJoinRoom(room, room.visibility === "passcode")
+                  }
+                  disabled={(room.members?.length || 0) >= room.capacity}
+                  sx={{
+                    px: 3,
+                    py: 1,
+                    fontWeight: 600,
+                    textTransform: 'none',
+                    borderRadius: '12px',
+                    border: '1px solid rgba(255,255,255,0.3)',
+                    color: 'rgba(255,255,255,0.9)',
+                    background: 'rgba(255,255,255,0.05)',
+                    transition: 'all 0.3s ease',
+                    '&:hover': {
+                      background: 'rgba(255,255,255,0.2)',
+                      border: '1.3px solid rgba(255,255,255,0.5)',
+                      transform: 'translateY(-2px)',
+                    },
+                    '&:disabled': {
+                      background: 'rgba(255,255,255,0.05)',
+                      color: 'rgba(255,255,255,0.3)',
+                      border: '1px solid rgba(255,255,255,0.1)',
+                    }
+                  }}
+                >
+                  {(room.members?.length || 0) >= room.capacity
+                    ? "満室"
+                    : "参加"}
+                </Button>
+              </Stack>
+            </CardContent>
+          </Card>
+        ))}
+      </Stack>
+      
 
       {/* ルーム作成ダイアログ */}
       <Dialog
@@ -316,7 +350,7 @@ export default function RoomsPage() {
           sx={{
             color: 'rgba(255,255,255,0.9)',
             fontWeight: 700,
-            fontSize: '1.5rem',
+            fontSize: { xs: '1rem', sm: '1.5rem' },
           }}
         >
           新しいルームを作成
