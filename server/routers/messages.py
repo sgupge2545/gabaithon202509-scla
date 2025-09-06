@@ -5,6 +5,7 @@
 import logging
 from typing import List
 
+import redis
 from fastapi import (
     APIRouter,
     Depends,
@@ -18,6 +19,7 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db, room_service, user_service
 from ..services.collection_manager import manager
+from ..services.game_service import game_service
 from ..services.message_service import (
     create_message,
     get_room_messages,
@@ -30,7 +32,7 @@ logger = logging.getLogger(__name__)
 
 # レスポンスモデル
 class MessageResponse(BaseModel):
-    id: int
+    id: str
     room_id: str
     user_id: str | None
     content: str
@@ -154,6 +156,34 @@ async def send_message(
     is_member = room_service.is_user_in_room(db, room_id, current_user["id"])
     if not is_member:
         raise HTTPException(status_code=403, detail="ルームに参加していません")
+
+    # ゲーム中の回答処理をチェック
+    try:
+        # ルームで進行中のゲームがあるかチェック
+        active_games = redis_client.keys(f"game:*")
+        for game_key in active_games:
+            try:
+                game_data = redis_client.hgetall(game_key)
+                if (
+                    game_data.get("room_id") == room_id
+                    and game_data.get("status") == "playing"
+                ):
+                    game_id = game_key.split(":")[-1]
+                    # 回答として処理
+                    await game_service.submit_answer(
+                        db,
+                        game_id,
+                        current_user["id"],
+                        message_data.content,
+                        current_user.get("name", ""),
+                    )
+                    break
+            except redis.ResponseError as re:
+                logger.warning(f"Redis type error for game {game_key}: {re}")
+                # Redis型エラーの場合、そのゲームをスキップ
+                continue
+    except Exception as e:
+        logger.warning(f"Failed to process game answer: {e}")
 
     # メッセージ作成
     try:

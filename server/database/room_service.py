@@ -87,6 +87,16 @@ def delete_room(db: Session, room_id: str, user_id: str) -> bool:
     # 生のSQLでCASCADE削除を実行
     db.execute(text("DELETE FROM rooms WHERE id = :room_id"), {"room_id": room_id})
     db.commit()
+
+    # Redisのゲーム情報もクリーンアップ
+    try:
+        from ..services.game_service import game_service
+
+        game_service.cleanup_room_games(room_id)
+    except Exception as e:
+        # ゲームクリーンアップに失敗してもルーム削除は成功とする
+        logging.warning(f"Failed to cleanup games for room {room_id}: {e}")
+
     return True
 
 
@@ -206,6 +216,15 @@ def leave_room(db: Session, room_id: str, user_id: str) -> bool:
                 text("DELETE FROM rooms WHERE id = :room_id"), {"room_id": room_id}
             )
             db.commit()
+
+            # Redisのゲーム情報もクリーンアップ
+            try:
+                from ..services.game_service import game_service
+
+                game_service.cleanup_room_games(room_id)
+            except Exception as e:
+                # ゲームクリーンアップに失敗してもルーム削除は成功とする
+                logging.warning(f"Failed to cleanup games for room {room_id}: {e}")
         return True
     except Exception:
         db.rollback()

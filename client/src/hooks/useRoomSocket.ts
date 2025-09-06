@@ -2,8 +2,12 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Message } from "@/types/message";
+import type { GameEvent } from "@/types/game";
 
-export function useRoomSocket(roomId?: string) {
+export function useRoomSocket(
+  roomId?: string,
+  onGameEvent?: (data: GameEvent) => void
+) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [connected, setConnected] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -49,12 +53,32 @@ export function useRoomSocket(roomId?: string) {
 
     ws.onmessage = (ev) => {
       try {
-        const payload = JSON.parse(ev.data) as Message;
-        const exists = messagesRef.current.find((m) => m.id === payload.id);
-        if (!exists) {
-          const next = [...messagesRef.current, payload];
-          messagesRef.current = next;
-          setMessages(next);
+        const data = JSON.parse(ev.data);
+
+        // ゲームイベントの場合
+        if (data.type && data.type.startsWith("game_") && onGameEvent) {
+          onGameEvent(data);
+          return;
+        }
+
+        // 通常のメッセージの場合
+        if (data.type === "message") {
+          const payload = data.message as Message;
+          const exists = messagesRef.current.find((m) => m.id === payload.id);
+          if (!exists) {
+            const next = [...messagesRef.current, payload];
+            messagesRef.current = next;
+            setMessages(next);
+          }
+        } else {
+          // 旧形式のメッセージ（後方互換性）
+          const payload = data as Message;
+          const exists = messagesRef.current.find((m) => m.id === payload.id);
+          if (!exists) {
+            const next = [...messagesRef.current, payload];
+            messagesRef.current = next;
+            setMessages(next);
+          }
         }
       } catch (e) {
         // ignore

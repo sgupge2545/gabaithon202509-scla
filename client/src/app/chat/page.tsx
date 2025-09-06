@@ -21,6 +21,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { useRoomSocket } from "@/hooks/useRoomSocket";
+import { useGameApi } from "@/hooks/useGameApi";
 
 export default function ChatPage() {
   const router = useRouter();
@@ -35,9 +36,18 @@ export default function ChatPage() {
 
   // 初期ロードは RoomContext の復元完了を待つ
 
+  // ゲーム状態管理（useRoomSocketより前に定義）
+  const [currentGameId, setCurrentGameId] = useState<string | null>(null);
+  const {
+    gameState,
+    startGame: startChatGame,
+    startQuizGame,
+    updateGameStateFromWebSocket,
+  } = useGameApi(currentGameId);
+
   // WebSocket + initial load handled by hook
   const { messages: socketMessages, sendMessage: sendMessageHook } =
-    useRoomSocket(currentRoom?.id || "");
+    useRoomSocket(currentRoom?.id || "", updateGameStateFromWebSocket);
 
   useEffect(() => {
     setMessages(socketMessages);
@@ -241,25 +251,65 @@ export default function ChatPage() {
   const confirmStartGame = async () => {
     try {
       setStartingGame(true);
-      const form = new FormData();
-      for (const file of selectedFiles) {
-        form.append("files", file, file.name);
-      }
-      // 必要になったら設定情報も送れるように残しておく
-      // form.append("config", JSON.stringify(problems));
-
       const base = process.env.NEXT_PUBLIC_API_BASE_URL || "";
-      const res = await fetch(`${base}/api/game/start`, {
-        method: "POST",
-        body: form,
-        headers: { Accept: "application/json" },
-      });
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(`Game start failed: ${res.status} ${text}`);
+
+      if (documentSource === "existing") {
+        // 既存資料を使用する場合
+        const requestData = {
+          room_id: currentRoom?.id || "",
+          document_source: "existing",
+          selected_doc_ids: selectedDocIds,
+          problems: problems,
+        };
+
+        const result = await startQuizGame(requestData);
+
+        if (result.error) {
+          throw new Error(`Game start failed: ${result.error}`);
+        }
+
+        console.log("クイズゲーム開始API 応答:", result.data);
+
+        // ゲーム開始後、ゲーム進行画面に切り替え
+        if (result.data?.game_id) {
+          setCurrentGameId(result.data.game_id);
+        }
+      } else {
+        // 新規ファイルアップロードの場合（既存の処理）
+        const form = new FormData();
+        for (const file of selectedFiles) {
+          form.append("files", file, file.name);
+        }
+        // 設定情報も送信
+        form.append(
+          "config",
+          JSON.stringify({
+            document_source: "new",
+            problems: problems,
+          })
+        );
+
+        const res = await fetch(`${base}/api/game/start`, {
+          method: "POST",
+          body: form,
+          headers: { Accept: "application/json" },
+          credentials: "include",
+        });
+
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error(`Game start failed: ${res.status} ${text}`);
+        }
+
+        const data = await res.json();
+        console.log("ゲーム開始API 応答:", data);
+
+        // ゲーム開始後、ゲーム進行画面に切り替え
+        if (data.game_id) {
+          setCurrentGameId(data.game_id);
+        }
       }
-      const data = await res.json();
-      console.log("ゲーム開始API 応答:", data);
+
       setGameDialogOpen(false);
     } catch (err) {
       console.error(err);
@@ -324,10 +374,42 @@ export default function ChatPage() {
                 )}
               </div>
             </div>
-            <Button onClick={startGame} className="ml-auto">
-              <FaPlay className="h-4 w-4 mr-2" />
-              ゲーム開始
-            </Button>
+            {gameState.gameStatus ? (
+              <div className="ml-auto flex items-center space-x-4">
+                {gameState.gameStatus.status === "playing" && (
+                  <div className="flex items-center space-x-2">
+                    <Badge variant="secondary">
+                      問題 {gameState.gameStatus.current_question_index + 1}/
+                      {gameState.gameStatus.total_questions}
+                    </Badge>
+                    <Badge
+                      variant={
+                        gameState.timeRemaining > 10 ? "default" : "destructive"
+                      }
+                    >
+                      残り {gameState.timeRemaining}秒
+                    </Badge>
+                  </div>
+                )}
+                {gameState.gameStatus.status === "ready" && (
+                  <Button onClick={startChatGame} size="sm">
+                    <FaPlay className="h-4 w-4 mr-2" />
+                    ゲーム開始
+                  </Button>
+                )}
+                {gameState.gameStatus.status === "generating" && (
+                  <Badge variant="outline">問題生成中...</Badge>
+                )}
+                {gameState.gameStatus.status === "finished" && (
+                  <Badge variant="secondary">ゲーム終了</Badge>
+                )}
+              </div>
+            ) : (
+              <Button onClick={startGame} className="ml-auto">
+                <FaPlay className="h-4 w-4 mr-2" />
+                ゲーム開始
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>
