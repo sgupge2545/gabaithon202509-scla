@@ -123,9 +123,9 @@ export default function ChatPage() {
   const [startingGame, setStartingGame] = useState(false);
 
   // 資料選択方式の状態管理
-  const [documentSource, setDocumentSource] = useState<"new" | "existing">(
-    "existing"
-  );
+  const [documentSource, setDocumentSource] = useState<
+    "new" | "existing" | "none"
+  >("existing");
   const [userDocuments, setUserDocuments] = useState<
     {
       id: string;
@@ -306,6 +306,27 @@ export default function ChatPage() {
         if (result.data?.game_id) {
           setCurrentGameId(result.data.game_id);
         }
+      } else if (documentSource === "none") {
+        // 一般知識モード
+        const requestData = {
+          room_id: currentRoom?.id || "",
+          document_source: "none",
+          selected_doc_ids: [],
+          problems: problems,
+        };
+
+        const result = await startQuizGame(requestData);
+
+        if (result.error) {
+          throw new Error(`Game start failed: ${result.error}`);
+        }
+
+        console.log("一般知識クイズゲーム開始API 応答:", result.data);
+
+        // ゲーム開始後、ゲーム進行画面に切り替え
+        if (result.data?.game_id) {
+          setCurrentGameId(result.data.game_id);
+        }
       } else {
         // 新規ファイルアップロードの場合（既存の処理）
         const form = new FormData();
@@ -469,7 +490,7 @@ export default function ChatPage() {
                 <span className="text-sm font-medium">資料を選択</span>
 
                 {/* 資料選択方式のラジオボタン */}
-                <div className="flex space-x-4">
+                <div className="flex flex-col space-y-2">
                   <label className="flex items-center cursor-pointer">
                     <input
                       type="radio"
@@ -493,6 +514,20 @@ export default function ChatPage() {
                       className="mr-2"
                     />
                     <span className="text-sm">新しい資料をアップロード</span>
+                  </label>
+                  <label className="flex items-center cursor-pointer">
+                    <input
+                      type="radio"
+                      value="none"
+                      checked={documentSource === "none"}
+                      onChange={(e) =>
+                        setDocumentSource(e.target.value as "none")
+                      }
+                      className="mr-2"
+                    />
+                    <span className="text-sm">
+                      資料を使わない（一般知識で出題）
+                    </span>
                   </label>
                 </div>
 
@@ -592,6 +627,27 @@ export default function ChatPage() {
                         </p>
                       </div>
                     )}
+                  </div>
+                )}
+
+                {/* 一般知識モードの説明 */}
+                {documentSource === "none" && (
+                  <div className="p-4 bg-blue-50 dark:bg-blue-950/30 rounded-lg">
+                    <div className="flex items-start space-x-2">
+                      <div className="text-blue-600 dark:text-blue-400 mt-0.5">
+                        💡
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-medium text-blue-800 dark:text-blue-200">
+                          一般知識モード
+                        </h4>
+                        <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
+                          資料を使わずに、AIの一般的な知識から問題を生成します。
+                          <br />
+                          出題設定で指定したテーマに基づいて問題が作成されます。
+                        </p>
+                      </div>
+                    </div>
                   </div>
                 )}
 

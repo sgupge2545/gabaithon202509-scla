@@ -150,6 +150,82 @@ class LLMService:
                 problem_type, count, selected_chunks
             )
 
+    async def generate_questions_from_general_knowledge(
+        self,
+        problem_type: str,
+        count: int,
+    ) -> List[Dict]:
+        """
+        一般知識から問題を生成
+
+        Args:
+            problem_type: 問題のタイプ（例: "日本の歴史に関する問題"）
+            count: 生成する問題数
+
+        Returns:
+            生成された問題のリスト
+        """
+        if not self.llm:
+            raise Exception("LLM not available - check GEMINI_API_KEY")
+
+        # プロンプトテンプレートを作成
+        prompt = ChatPromptTemplate.from_template(
+            """
+あなたは教育的なクイズ問題を作成する専門家です。
+
+「{problem_type}」について、一般的な知識から{count}問作成してください。
+
+制約:
+- 各問題は重複しない内容にする
+- 難易度は中級レベル
+- 回答は簡潔に（1-3語程度が望ましい）
+- ヒントも含める
+- 問題の背景情報も含める
+- 一般的によく知られた内容から出題する
+
+以下のJSON形式で出力してください:
+{{
+  "questions": [
+    {{
+      "question": "問題文",
+      "reference_answer": "正解例",
+      "hint": "ヒント",
+      "context": "問題の背景情報",
+      "source_chunk": "一般知識"
+    }}
+  ]
+}}
+        """
+        )
+
+        # JSON出力パーサーを設定
+        parser = JsonOutputParser(pydantic_object=QuizQuestions)
+        chain = prompt | self.llm | parser
+
+        try:
+            # LLMを実行
+            result = await chain.ainvoke(
+                {
+                    "problem_type": problem_type,
+                    "count": count,
+                }
+            )
+
+            questions = result.get("questions", [])
+
+            # 問題にインデックスを追加
+            for i, question in enumerate(questions):
+                question["question_index"] = i
+
+            logging.info(
+                f"Generated {len(questions)} questions for type: {problem_type} (general knowledge)"
+            )
+            return questions
+
+        except Exception as e:
+            logging.error(f"General knowledge question generation failed: {e}")
+            return []
+
     async def grade_answer(
         self, question: str, reference_answer: str, user_answer: str, context: str = ""
     ) -> Dict:

@@ -15,7 +15,6 @@ from sqlalchemy.orm import Session
 
 from ..services.collection_manager import manager
 from ..services.llm_service import llm_service
-from ..services.message_service import create_message
 from ..services.vector_search_service import vector_search_service
 
 # Redisクライアント
@@ -80,7 +79,11 @@ class GameService:
 
     @staticmethod
     async def generate_and_store_questions(
-        db: Session, game_id: str, doc_ids: List[str], problems: List[Dict]
+        db: Session,
+        game_id: str,
+        doc_ids: List[str],
+        problems: List[Dict],
+        use_general_knowledge: bool = False,
     ) -> bool:
         """
         問題を生成してRedisに保存
@@ -104,25 +107,37 @@ class GameService:
                 if not problem_type or count <= 0:
                     continue
 
-                # ベクトル検索で関連チャンクを取得
-                similar_chunks = await vector_search_service.search_similar_chunks(
-                    db=db, query_text=problem_type, doc_ids=doc_ids, limit=20
-                )
-
-                # チャンクのテキストを抽出
-                chunk_texts = [chunk.content for chunk, _ in similar_chunks]
-
-                # フォールバック: 類似チャンクが少ない場合は全チャンクから取得
-                if len(chunk_texts) < 5:
-                    all_chunks = vector_search_service.get_chunks_from_selected_docs(
-                        db=db, doc_ids=doc_ids, limit=20
+                if use_general_knowledge:
+                    # 一般知識モード: ベクトル検索を使わずにLLMで問題生成
+                    questions = (
+                        await llm_service.generate_questions_from_general_knowledge(
+                            problem_type=problem_type, count=count
+                        )
                     )
-                    chunk_texts.extend([chunk.content for chunk in all_chunks])
+                else:
+                    # 資料ベースモード: ベクトル検索で関連チャンクを取得
+                    similar_chunks = await vector_search_service.search_similar_chunks(
+                        db=db, query_text=problem_type, doc_ids=doc_ids, limit=20
+                    )
 
-                # LLMで問題生成
-                questions = await llm_service.generate_questions(
-                    problem_type=problem_type, count=count, context_chunks=chunk_texts
-                )
+                    # チャンクのテキストを抽出
+                    chunk_texts = [chunk.content for chunk, _ in similar_chunks]
+
+                    # フォールバック: 類似チャンクが少ない場合は全チャンクから取得
+                    if len(chunk_texts) < 5:
+                        all_chunks = (
+                            vector_search_service.get_chunks_from_selected_docs(
+                                db=db, doc_ids=doc_ids, limit=20
+                            )
+                        )
+                        chunk_texts.extend([chunk.content for chunk in all_chunks])
+
+                    # LLMで問題生成
+                    questions = await llm_service.generate_questions(
+                        problem_type=problem_type,
+                        count=count,
+                        context_chunks=chunk_texts,
+                    )
 
                 # 問題タイプを追加
                 for question in questions:

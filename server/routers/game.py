@@ -164,15 +164,18 @@ async def start_quiz_game(
 
         user_id = session_user["id"]
 
-        # 選択されたドキュメントからチャンクを取得
-        if not request_data.selected_doc_ids:
-            raise HTTPException(status_code=400, detail="資料が選択されていません")
+        # 一般知識モードでない場合のみ資料チェック
+        if request_data.document_source != "none":
+            if not request_data.selected_doc_ids:
+                raise HTTPException(status_code=400, detail="資料が選択されていません")
 
-        chunks = get_chunks_from_selected_docs(db, request_data.selected_doc_ids)
-        if not chunks:
-            raise HTTPException(
-                status_code=400, detail="選択された資料にチャンクが見つかりません"
-            )
+            chunks = get_chunks_from_selected_docs(db, request_data.selected_doc_ids)
+            if not chunks:
+                raise HTTPException(
+                    status_code=400, detail="選択された資料にチャンクが見つかりません"
+                )
+        else:
+            chunks = []  # 一般知識モードではチャンクは不要
 
         logging.info(
             "[QUIZ] User %s starting quiz game with %d documents, %d chunks",
@@ -205,12 +208,14 @@ async def start_quiz_game(
         # バックグラウンドで問題生成を開始
         import asyncio
 
+        use_general_knowledge = request_data.document_source == "none"
         asyncio.create_task(
             game_service.generate_and_store_questions(
                 db=db,
                 game_id=game_id,
                 doc_ids=request_data.selected_doc_ids,
                 problems=[p.dict() for p in request_data.problems],
+                use_general_knowledge=use_general_knowledge,
             )
         )
 
