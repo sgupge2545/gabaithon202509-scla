@@ -3,6 +3,7 @@
 """
 
 import asyncio
+import json
 import logging
 from typing import List
 
@@ -157,8 +158,20 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str):
     await manager.connect(room_id, websocket)
     try:
         while True:
-            # クライアントからのメッセージを待機して接続を維持する（処理は不要）
-            await websocket.receive_text()
+            # クライアントからのメッセージを待機
+            message = await websocket.receive_text()
+
+            try:
+                # JSONメッセージの場合、ハートビートに対応
+                data = json.loads(message)
+                if data.get("type") == "ping":
+                    # ハートビートに応答
+                    await websocket.send_text(json.dumps({"type": "pong"}))
+                    continue
+            except (json.JSONDecodeError, KeyError):
+                # JSON以外のメッセージは無視
+                pass
+
     except WebSocketDisconnect:
         await manager.disconnect(room_id, websocket)
 
