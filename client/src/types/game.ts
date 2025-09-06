@@ -39,10 +39,25 @@ export interface AnswerRequest {
 }
 
 export interface GameEvent {
-  type: "game_status_update" | "game_question" | "game_hint" | "game_timer";
+  type:
+    | "game_status_update"
+    | "game_question"
+    | "game_hint"
+    | "game_timer"
+    | "game_grading_result";
   gameStatus?: GameStatus;
   question?: Question;
   timeRemaining?: number;
+  user_id?: string;
+  message_id?: string;
+  result?: GradingResult;
+}
+
+export interface GradingResult {
+  is_correct: boolean;
+  score: number;
+  feedback: string;
+  user_name: string;
 }
 
 export interface AnswerResult {

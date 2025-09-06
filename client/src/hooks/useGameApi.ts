@@ -175,35 +175,40 @@ export function useGameApi(gameId: string | null) {
   );
 
   // WebSocketでゲーム状態を更新
-  const updateGameStateFromWebSocket = useCallback((data: GameEvent) => {
-    if (data.type === "game_status_update") {
-      setGameState((prev) => ({
-        ...prev,
-        gameStatus: data.gameStatus || null,
-        error: null,
-      }));
-    } else if (data.type === "game_question") {
-      setGameState((prev) => ({
-        ...prev,
-        currentQuestion: data.question || null,
-        timeRemaining: 20,
-        showHint: false,
-        error: null,
-      }));
-    } else if (data.type === "game_hint") {
-      setGameState((prev) => ({
-        ...prev,
-        showHint: true,
-        error: null,
-      }));
-    } else if (data.type === "game_timer") {
-      setGameState((prev) => ({
-        ...prev,
-        timeRemaining: data.timeRemaining || 0,
-        error: null,
-      }));
-    }
-  }, []);
+  const updateGameStateFromWebSocket = useCallback(
+    (data: GameEvent, onGradingResult?: (data: GameEvent) => void) => {
+      if (data.type === "game_status_update") {
+        setGameState((prev) => ({
+          ...prev,
+          gameStatus: data.gameStatus || null,
+          error: null,
+        }));
+      } else if (data.type === "game_question") {
+        setGameState((prev) => ({
+          ...prev,
+          currentQuestion: data.question || null,
+          timeRemaining: 20,
+          showHint: false,
+          error: null,
+        }));
+      } else if (data.type === "game_hint") {
+        setGameState((prev) => ({
+          ...prev,
+          showHint: true,
+          error: null,
+        }));
+      } else if (data.type === "game_timer") {
+        setGameState((prev) => ({
+          ...prev,
+          timeRemaining: data.timeRemaining || 0,
+          error: null,
+        }));
+      } else if (data.type === "game_grading_result" && onGradingResult) {
+        onGradingResult(data);
+      }
+    },
+    []
+  );
 
   // ゲーム状態がreadyになったら自動的にゲームを開始
   useEffect(() => {

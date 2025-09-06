@@ -22,6 +22,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { useRoomSocket } from "@/hooks/useRoomSocket";
 import { useGameApi } from "@/hooks/useGameApi";
+import type { GradingResult, GameEvent } from "@/types/game";
 
 export default function ChatPage() {
   const router = useRouter();
@@ -30,6 +31,26 @@ export default function ChatPage() {
   const [sendingMessage, setSendingMessage] = useState(false);
   const [exiting, setExiting] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // 採点結果管理
+  const [gradingResults, setGradingResults] = useState<
+    Record<string, GradingResult | { loading: boolean }>
+  >({
+    // ダミーデータ: 採点中のUI確認用
+    dummy_loading_1: { loading: true },
+    dummy_correct_1: {
+      is_correct: true,
+      score: 10,
+      feedback: "正確な回答です！",
+      user_name: "テストユーザー",
+    },
+    dummy_incorrect_1: {
+      is_correct: false,
+      score: 0,
+      feedback: "惜しいです。もう少し具体的に答えてください。",
+      user_name: "テストユーザー",
+    },
+  });
 
   const { user } = useAuth();
   const { leaveRoom, currentRoom, initialized } = useRoom();
@@ -45,9 +66,21 @@ export default function ChatPage() {
     updateGameStateFromWebSocket,
   } = useGameApi(currentGameId);
 
+  // 採点結果を処理するコールバック
+  const handleGradingResult = (data: GameEvent) => {
+    if (data.message_id && data.result) {
+      setGradingResults((prev) => ({
+        ...prev,
+        [data.message_id as string]: data.result as GradingResult,
+      }));
+    }
+  };
+
   // WebSocket + initial load handled by hook
   const { messages: socketMessages, sendMessage: sendMessageHook } =
-    useRoomSocket(currentRoom?.id || "", updateGameStateFromWebSocket);
+    useRoomSocket(currentRoom?.id || "", (data) =>
+      updateGameStateFromWebSocket(data, handleGradingResult)
+    );
 
   useEffect(() => {
     setMessages(socketMessages);
@@ -57,6 +90,20 @@ export default function ChatPage() {
     if (!newMessage.trim() || sendingMessage || !currentRoom?.id) return;
 
     setSendingMessage(true);
+
+    // ゲーム中の場合、採点用のローディング状態を即座に作成
+    if (
+      gameState.gameStatus?.status === "playing" &&
+      currentGameId &&
+      user?.id
+    ) {
+      const messageId = `answer_${currentGameId}_${gameState.gameStatus.current_question_index}_${user.id}`;
+      setGradingResults((prev) => ({
+        ...prev,
+        [messageId]: { loading: true },
+      }));
+    }
+
     try {
       await sendMessageHook(newMessage);
       setNewMessage("");
@@ -729,12 +776,38 @@ export default function ChatPage() {
               !prevMessage || prevMessage.user?.id !== message.user?.id;
             const showName = showAvatar && !isOwnMessage(message, user);
 
+            // 採点結果を取得（ゲーム中の自分のメッセージの場合）
+            let gradingResult:
+              | GradingResult
+              | { loading: boolean }
+              | undefined = undefined;
+            if (
+              gameState.gameStatus?.status === "playing" &&
+              currentGameId &&
+              message.user?.id === user?.id
+            ) {
+              const messageId = `answer_${currentGameId}_${gameState.gameStatus.current_question_index}_${user?.id}`;
+              gradingResult = gradingResults[messageId];
+            }
+
+            // ダミーデータ表示用（UI確認）
+            if (message.user?.id === user?.id && index < 3) {
+              const dummyKeys = [
+                "dummy_loading_1",
+                "dummy_correct_1",
+                "dummy_incorrect_1",
+              ];
+              gradingResult = gradingResults[dummyKeys[index]];
+            }
+
             return (
               <MessageItem
                 key={message.id}
                 message={message}
                 showAvatar={showAvatar}
                 showName={showName}
+                gradingResult={gradingResult}
+                currentUserId={user?.id}
               />
             );
           })}
@@ -777,10 +850,14 @@ function MessageItem({
   message,
   showAvatar = true,
   showName = true,
+  gradingResult,
+  currentUserId,
 }: {
   message: Message;
   showAvatar?: boolean;
   showName?: boolean;
+  gradingResult?: GradingResult | { loading: boolean };
+  currentUserId?: string;
 }) {
   const formatTime = (dateString: string) => {
     const date = new Date(dateString);
@@ -795,11 +872,15 @@ function MessageItem({
 
   return (
     <div
-      className={`flex ${
+      className={`flex flex-col ${
         isOwnMessageFunc ? "justify-end" : "justify-start"
       } mb-1 px-2`}
     >
-      <div className="flex items-end max-w-[75%]">
+      <div
+        className={`flex flex-row items-end w-full ${
+          isOwnMessageFunc ? "justify-end" : "justify-start"
+        }`}
+      >
         <div
           className={`flex-shrink-0 ${
             isOwnMessageFunc ? "order-2 ml-2" : "order-1 mr-2"
@@ -863,6 +944,58 @@ function MessageItem({
           </div>
         </div>
       </div>
+
+      {/* 採点結果スペース */}
+      {gradingResult && message.user?.id === currentUserId && (
+        <div
+          className={`mt-2 ${
+            isOwnMessageFunc ? "justify-end" : "justify-start"
+          } flex`}
+        >
+          <div
+            className={`px-3 py-2 rounded-lg text-sm max-w-md ${
+              "loading" in gradingResult && gradingResult.loading
+                ? "bg-gray-100 dark:bg-gray-800 border-2 border-dashed border-gray-300 dark:border-gray-600"
+                : "is_correct" in gradingResult && gradingResult.is_correct
+                ? "bg-green-100 dark:bg-green-900 border border-green-300 dark:border-green-700"
+                : "bg-red-100 dark:bg-red-900 border border-red-300 dark:border-red-700"
+            }`}
+          >
+            {"loading" in gradingResult && gradingResult.loading ? (
+              <div className="flex items-center space-x-2">
+                <div className="animate-spin rounded-full h-4 w-4 border-2 border-gray-400 border-t-transparent"></div>
+                <span className="text-gray-600 dark:text-gray-400">
+                  採点中...
+                </span>
+              </div>
+            ) : "is_correct" in gradingResult ? (
+              <div>
+                <div
+                  className={`font-semibold ${
+                    gradingResult.is_correct
+                      ? "text-green-800 dark:text-green-200"
+                      : "text-red-800 dark:text-red-200"
+                  }`}
+                >
+                  {gradingResult.is_correct ? "✅ 正解！" : "❌ 不正解"}
+                  <span className="ml-2">({gradingResult.score}点)</span>
+                </div>
+                {gradingResult.feedback && (
+                  <div
+                    className={`mt-1 text-xs ${
+                      gradingResult.is_correct
+                        ? "text-green-700 dark:text-green-300"
+                        : "text-red-700 dark:text-red-300"
+                    }`}
+                  >
+                    {gradingResult.feedback}
+                  </div>
+                )}
+              </div>
+            ) : null}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

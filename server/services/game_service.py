@@ -525,14 +525,23 @@ class GameService:
             # スコアを更新
             GameService._update_user_score(game_id, user_id, grading_result["score"])
 
-            # 回答結果をチャットに送信
-            await GameService.send_answer_result(
-                db,
-                game_id,
-                user_name or user_id,
-                grading_result["is_correct"],
-                grading_result["score"],
-            )
+            # 採点結果をWebSocketで送信（チャットメッセージとしては送信しない）
+            game_data = GameService.get_game_info(game_id)
+            if game_data:
+                await manager.broadcast(
+                    game_data["room_id"],
+                    {
+                        "type": "game_grading_result",
+                        "user_id": user_id,
+                        "message_id": f"answer_{game_id}_{question_index}_{user_id}",
+                        "result": {
+                            "is_correct": grading_result["is_correct"],
+                            "score": grading_result["score"],
+                            "feedback": grading_result["feedback"],
+                            "user_name": user_name or user_id,
+                        },
+                    },
+                )
 
             logging.info(
                 f"Answer submitted for game {game_id}, user {user_id}: {grading_result['score']} points"
