@@ -32,7 +32,7 @@ export default function ChatPage() {
   const [exiting, setExiting] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // 採点結果管理
+  // 採点結果管理（メッセージIDをキーとして使用）
   const [gradingResults, setGradingResults] = useState<
     Record<string, GradingResult | { loading: boolean }>
   >({});
@@ -77,27 +77,26 @@ export default function ChatPage() {
 
     setSendingMessage(true);
 
-    // ゲーム中の場合、採点用のローディング状態を即座に作成
-    if (
-      gameState.gameStatus?.status === "playing" &&
-      currentGameId &&
-      user?.id
-    ) {
-      // 送信するメッセージのIDを生成（実際のメッセージIDではなく、一意のキー）
-      const tempMessageId = `temp_${Date.now()}_${user.id}`;
-      setGradingResults((prev) => ({
-        ...prev,
-        [tempMessageId]: { loading: true },
-      }));
-
-      // 実際のメッセージ送信後にIDを更新するため、tempMessageIdを保存
-      // この実装では、メッセージ送信成功後にWebSocketで正しいIDが来るまで待つ
-    }
+    // ゲーム中の場合、このメッセージを採点対象として記録
+    const isGameMessage =
+      gameState.gameStatus?.status === "playing" && currentGameId && user?.id;
 
     try {
-      await sendMessageHook(newMessage);
+      const sentMessage = await sendMessageHook(newMessage);
+
+      // ゲーム中のメッセージの場合、採点待ちローディング状態を設定
+      if (isGameMessage && sentMessage?.id) {
+        setGradingResults((prev) => ({
+          ...prev,
+          [sentMessage.id]: { loading: true },
+        }));
+        // 採点中スピナー表示後に自動スクロール
+        setTimeout(() => scrollToBottom(), 100);
+      }
+
       setNewMessage("");
-    } catch {
+    } catch (error) {
+      console.error("Failed to send message:", error);
     } finally {
       setSendingMessage(false);
     }
@@ -117,6 +116,11 @@ export default function ChatPage() {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // 採点結果が更新された時も自動スクロール
+  useEffect(() => {
+    scrollToBottom();
+  }, [gradingResults]);
 
   const [gameDialogOpen, setGameDialogOpen] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
@@ -832,19 +836,8 @@ export default function ChatPage() {
               !prevMessage || prevMessage.user?.id !== message.user?.id;
             const showName = showAvatar && !isOwnMessage(message, user);
 
-            // 採点結果を取得（ゲーム中の自分のメッセージの場合）
-            let gradingResult:
-              | GradingResult
-              | { loading: boolean }
-              | undefined = undefined;
-            if (
-              gameState.gameStatus?.status === "playing" &&
-              currentGameId &&
-              message.user?.id === user?.id
-            ) {
-              const messageId = `answer_${currentGameId}_${gameState.gameStatus.current_question_index}_${user?.id}`;
-              gradingResult = gradingResults[messageId];
-            }
+            // 採点結果を取得（実際のメッセージIDをキーとして使用）
+            const gradingResult = gradingResults[message.id];
 
             return (
               <MessageItem
@@ -853,7 +846,6 @@ export default function ChatPage() {
                 showAvatar={showAvatar}
                 showName={showName}
                 gradingResult={gradingResult}
-                currentUserId={user?.id}
               />
             );
           })}
@@ -897,13 +889,11 @@ function MessageItem({
   showAvatar = true,
   showName = true,
   gradingResult,
-  currentUserId,
 }: {
   message: Message;
   showAvatar?: boolean;
   showName?: boolean;
   gradingResult?: GradingResult | { loading: boolean };
-  currentUserId?: string;
 }) {
   const formatTime = (dateString: string) => {
     const date = new Date(dateString);
@@ -992,7 +982,7 @@ function MessageItem({
       </div>
 
       {/* 採点結果スペース */}
-      {gradingResult && message.user?.id === currentUserId && (
+      {gradingResult && (
         <div
           className={`mt-2 ${
             isOwnMessageFunc ? "justify-end" : "justify-start"

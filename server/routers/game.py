@@ -210,8 +210,7 @@ async def start_quiz_game(
 
         use_general_knowledge = request_data.document_source == "none"
         asyncio.create_task(
-            game_service.generate_and_store_questions(
-                db=db,
+            game_service.generate_and_store_questions_background(
                 game_id=game_id,
                 doc_ids=request_data.selected_doc_ids,
                 problems=[p.dict() for p in request_data.problems],

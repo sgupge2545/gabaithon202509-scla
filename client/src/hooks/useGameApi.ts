@@ -210,36 +210,19 @@ export function useGameApi(gameId: string | null) {
     []
   );
 
-  // ゲーム状態がreadyになったら自動的にゲームを開始
-  useEffect(() => {
-    if (gameState.gameStatus?.status === "ready" && gameId) {
-      console.log("Game is ready, starting automatically...");
-      startGame();
-    }
-  }, [gameState.gameStatus?.status, gameId, startGame]);
+  // 自動開始はサーバー側で行うため、フロントエンド側の自動開始処理は削除
 
-  // ゲームIDが設定されたら状態をポーリング
+  // ゲームIDが設定されたら初回状態を取得（WebSocketで以降の更新を受信）
   useEffect(() => {
     if (!gameId) return;
 
-    const pollGameStatus = async () => {
+    // 初回のみ状態を取得（以降はWebSocketで更新）
+    const fetchInitialStatus = async () => {
       await fetchGameStatus();
     };
 
-    // 初回実行
-    pollGameStatus();
-
-    // 問題生成中は定期的にポーリング
-    const interval = setInterval(() => {
-      if (gameState.gameStatus?.status === "generating") {
-        pollGameStatus();
-      } else {
-        clearInterval(interval);
-      }
-    }, 2000);
-
-    return () => clearInterval(interval);
-  }, [gameId, gameState.gameStatus?.status, fetchGameStatus]);
+    fetchInitialStatus();
+  }, [gameId, fetchGameStatus]);
 
   return {
     gameState,

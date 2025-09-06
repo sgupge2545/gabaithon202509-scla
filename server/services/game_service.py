@@ -78,6 +78,28 @@ class GameService:
         return game_id
 
     @staticmethod
+    async def generate_and_store_questions_background(
+        game_id: str,
+        doc_ids: List[str],
+        problems: List[Dict],
+        use_general_knowledge: bool = False,
+    ) -> bool:
+        """バックグラウンドタスク用の問題生成（新しいDBセッションを作成）"""
+        from ..database.database import SessionLocal
+
+        db = SessionLocal()
+        try:
+            return await GameService.generate_and_store_questions(
+                db=db,
+                game_id=game_id,
+                doc_ids=doc_ids,
+                problems=problems,
+                use_general_knowledge=use_general_knowledge,
+            )
+        finally:
+            db.close()
+
+    @staticmethod
     async def generate_and_store_questions(
         db: Session,
         game_id: str,
@@ -98,6 +120,21 @@ class GameService:
             成功したかどうか
         """
         try:
+            # ゲーム状態を"generating"に更新
+            redis_client.hset(f"game:{game_id}", "status", "generating")
+
+            # 問題作成開始メッセージを送信
+            logging.info(f"Sending game start message for game {game_id}")
+            await GameService.send_ai_message(
+                db,
+                game_id,
+                "問題を作成中です... しばらくお待ちください。",
+            )
+            logging.info(f"Game start message sent successfully for game {game_id}")
+
+            # 問題生成開始状態をWebSocketで配信
+            await GameService.broadcast_game_status(game_id)
+
             all_questions = []
 
             for problem in problems:
@@ -158,8 +195,14 @@ class GameService:
             )
             redis_client.hset(f"game:{game_id}", "status", "ready")
 
+            # 問題作成完了メッセージは送信しない（直接ゲーム開始メッセージへ）
+
             # ゲーム状態をWebSocketで配信
             await GameService.broadcast_game_status(game_id)
+
+            # 自動的にゲームを開始
+            await asyncio.sleep(1)  # 1秒待機してからゲーム開始
+            await GameService.start_game(db, game_id)
 
             logging.info(
                 f"Generated and stored {len(all_questions)} questions for game {game_id}"
@@ -168,6 +211,17 @@ class GameService:
 
         except Exception as e:
             logging.error(f"Question generation failed for game {game_id}: {e}")
+
+            # エラーメッセージを送信
+            try:
+                await GameService.send_ai_message(
+                    db,
+                    game_id,
+                    "❌ **問題作成に失敗しました**\n\n申し訳ございません。もう一度お試しください。",
+                )
+            except Exception as msg_error:
+                logging.error(f"Failed to send error message: {msg_error}")
+
             return False
 
     @staticmethod
@@ -189,10 +243,19 @@ class GameService:
 
     @staticmethod
     async def send_ai_message(
-        db: Session, room_id: str, content: str, message_type: str = "game_question"
+        db: Session, game_id: str, content: str, message_type: str = "game_question"
     ) -> bool:
         """AIメッセージをチャットに送信"""
         try:
+            # ゲーム情報からroom_idを取得
+            game_data = GameService.get_game_info(game_id)
+            if not game_data:
+                logging.error(f"Game {game_id} not found for AI message")
+                return False
+
+            room_id = game_data["room_id"]
+            logging.info(f"Sending AI message to room {room_id} for game {game_id}")
+
             # AIメッセージを直接Redisに保存
             message_id = str(uuid.uuid4())
             created_at = datetime.now().isoformat()
@@ -233,6 +296,7 @@ class GameService:
                 },
             )
 
+            logging.info(f"AI message sent successfully: {message_id}")
             return True
         except Exception as e:
             logging.error(f"Failed to send AI message: {e}")
@@ -249,6 +313,13 @@ class GameService:
                     "started_at": datetime.now().isoformat(),
                     "current_question_index": "0",
                 },
+            )
+
+            # ゲーム開始メッセージを送信
+            await GameService.send_ai_message(
+                db,
+                game_id,
+                "🚀 **ゲーム開始！**\n\n頑張って答えてください！最初に正解した人が得点を獲得します。",
             )
 
             # 最初の問題を送信
@@ -348,12 +419,14 @@ class GameService:
                 if remaining == 11:
                     await GameService.send_hint(db, game_id)
 
-            # 時間切れの場合、次の問題へ（タイマーがまだ有効な場合のみ）
+            # 時間切れの場合、正解を表示してから次の問題へ（タイマーがまだ有効な場合のみ）
             current_timer = redis_client.get(f"game:{game_id}:current_timer")
             if current_timer == timer_id:
                 current_game = GameService.get_game_info(game_id)
                 if current_game and current_game["status"] == "playing":
-                    await GameService.next_question(db, game_id)
+                    await GameService.handle_timeout(
+                        db, game_id, current_question_index
+                    )
 
             return True
         except Exception as e:
@@ -388,7 +461,7 @@ class GameService:
 
             # AIメッセージとして送信
             await GameService.send_ai_message(
-                db, room_id, question_content, "game_question"
+                db, game_id, question_content, "game_question"
             )
 
             # WebSocketで問題イベントを配信
@@ -442,13 +515,11 @@ class GameService:
             if not current_question or not current_question.get("hint"):
                 return False
 
-            room_id = game_data["room_id"]
-
             # ヒントメッセージを作成
             hint_content = f"💡 **ヒント**: {current_question['hint']}"
 
             # AIメッセージとして送信
-            await GameService.send_ai_message(db, room_id, hint_content, "game_hint")
+            await GameService.send_ai_message(db, game_id, hint_content, "game_hint")
 
             return True
         except Exception as e:
@@ -466,8 +537,6 @@ class GameService:
             if not game_data:
                 return False
 
-            room_id = game_data["room_id"]
-
             if is_correct:
                 result_content = (
                     f"🎉 **正解！** {user_name}さんが {points}点 獲得しました！"
@@ -477,7 +546,7 @@ class GameService:
 
             # AIメッセージとして送信
             await GameService.send_ai_message(
-                db, room_id, result_content, "game_result"
+                db, game_id, result_content, "game_result"
             )
 
             return True
@@ -499,7 +568,6 @@ class GameService:
             if not current_question:
                 return False
 
-            room_id = game_data["room_id"]
             question_num = int(game_data["current_question_index"]) + 1
             total_questions = int(game_data["total_questions"])
 
@@ -513,7 +581,7 @@ class GameService:
 
             # AIメッセージとして送信
             await GameService.send_ai_message(
-                db, room_id, question_content, "game_question"
+                db, game_id, question_content, "game_question"
             )
 
             return True
@@ -523,7 +591,12 @@ class GameService:
 
     @staticmethod
     async def submit_answer(
-        db: Session, game_id: str, user_id: str, answer: str, user_name: str = ""
+        db: Session,
+        game_id: str,
+        user_id: str,
+        answer: str,
+        user_name: str = "",
+        message_id: str = "",
     ) -> Optional[Dict]:
         """回答を提出して採点"""
         try:
@@ -571,7 +644,8 @@ class GameService:
                     {
                         "type": "game_grading_result",
                         "user_id": user_id,
-                        "message_id": f"answer_{game_id}_{question_index}_{user_id}",
+                        "message_id": message_id
+                        or f"answer_{game_id}_{question_index}_{user_id}",
                         "result": {
                             "is_correct": grading_result["is_correct"],
                             "score": grading_result["score"],
@@ -622,6 +696,56 @@ class GameService:
             logging.error(
                 f"Failed to update score for user {user_id} in game {game_id}: {e}"
             )
+
+    @staticmethod
+    async def handle_timeout(db: Session, game_id: str, question_index: int):
+        """時間切れの処理：正解表示→3秒待機→次の問題"""
+        try:
+            # 現在のタイマーを無効化
+            invalidate_timer_id = f"timeout_{game_id}_{question_index}"
+            redis_client.set(
+                f"game:{game_id}:current_timer", invalidate_timer_id, ex=30
+            )
+            logging.info(f"Timeout for question {question_index}")
+
+            # 現在の問題を取得
+            questions_json = redis_client.get(f"game:{game_id}:questions")
+            if not questions_json:
+                logging.error(f"Questions not found for game {game_id}")
+                return
+
+            questions = json.loads(questions_json)
+            if question_index >= len(questions):
+                logging.error(
+                    f"Question index {question_index} out of range for game {game_id}"
+                )
+                return
+
+            question_data = questions[question_index]
+
+            # 時間切れメッセージを作成
+            timeout_content = f"""⏰ **時間切れ！** ⏰
+
+**正解**: {question_data.get('reference_answer', '不明')}
+
+**解説**:
+{question_data.get('explanation', '解説がありません')}
+
+次の問題まで3秒お待ちください..."""
+
+            # 時間切れメッセージをAIメッセージとして送信
+            await GameService.send_ai_message(db, game_id, timeout_content)
+
+            # 3秒待機
+            await asyncio.sleep(3)
+
+            # 次の問題に進む
+            await GameService.next_question(db, game_id)
+
+        except Exception as e:
+            logging.error(f"Failed to handle timeout for game {game_id}: {e}")
+            # エラーが発生した場合でも次の問題に進む
+            await GameService.next_question(db, game_id)
 
     @staticmethod
     async def handle_correct_answer(
@@ -701,6 +825,13 @@ class GameService:
                         "status": "finished",
                         "finished_at": datetime.now().isoformat(),
                     },
+                )
+
+                # ゲーム終了メッセージを送信
+                await GameService.send_ai_message(
+                    db,
+                    game_id,
+                    "🎊 **ゲーム終了！**\n\nお疲れ様でした！結果をご確認ください。\n新しいゲームを始めたい場合は「新しいゲーム」ボタンを押してください。",
                 )
 
                 # ゲーム終了イベントを配信

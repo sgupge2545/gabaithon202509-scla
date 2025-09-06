@@ -2,6 +2,7 @@
 メッセージ関連のAPIエンドポイント
 """
 
+import asyncio
 import logging
 from typing import List
 
@@ -46,6 +47,26 @@ class MessageResponse(BaseModel):
 # リクエストモデル
 class SendMessageRequest(BaseModel):
     content: str = Field(..., min_length=1, max_length=1000)
+
+
+async def process_game_answer_async(
+    game_id: str, user_id: str, content: str, user_name: str, message_id: str
+):
+    """ゲームの回答を非同期で処理"""
+    try:
+        # 新しいDBセッションを作成
+        from ..database import get_db
+
+        db_gen = get_db()
+        db = next(db_gen)
+        try:
+            await game_service.submit_answer(
+                db, game_id, user_id, content, user_name, message_id
+            )
+        finally:
+            db.close()
+    except Exception as e:
+        logger.error(f"Failed to process async game answer: {e}")
 
 
 def get_current_user(request: Request, db: Session) -> dict:
@@ -157,35 +178,7 @@ async def send_message(
     if not is_member:
         raise HTTPException(status_code=403, detail="ルームに参加していません")
 
-    # ゲーム中の回答処理をチェック
-    try:
-        # ルームで進行中のゲームがあるかチェック
-        active_games = redis_client.keys(f"game:*")
-        for game_key in active_games:
-            try:
-                game_data = redis_client.hgetall(game_key)
-                if (
-                    game_data.get("room_id") == room_id
-                    and game_data.get("status") == "playing"
-                ):
-                    game_id = game_key.split(":")[-1]
-                    # 回答として処理
-                    await game_service.submit_answer(
-                        db,
-                        game_id,
-                        current_user["id"],
-                        message_data.content,
-                        current_user.get("name", ""),
-                    )
-                    break
-            except redis.ResponseError as re:
-                logger.warning(f"Redis type error for game {game_key}: {re}")
-                # Redis型エラーの場合、そのゲームをスキップ
-                continue
-    except Exception as e:
-        logger.warning(f"Failed to process game answer: {e}")
-
-    # メッセージ作成
+    # メッセージ作成（先に送信）
     try:
         message = create_message(
             db=db,
@@ -228,6 +221,35 @@ async def send_message(
     except Exception:
         # ブロードキャスト失敗は致命的ではない
         pass
+
+    # ゲーム中の回答処理を非同期で実行（メッセージ送信後）
+    try:
+        # ルームで進行中のゲームがあるかチェック
+        active_games = redis_client.keys("game:*")
+        for game_key in active_games:
+            try:
+                game_data = redis_client.hgetall(game_key)
+                if (
+                    game_data.get("room_id") == room_id
+                    and game_data.get("status") == "playing"
+                ):
+                    game_id = game_key.split(":")[-1]
+                    # 回答処理を非同期で実行（メッセージIDを含める）
+                    asyncio.create_task(
+                        process_game_answer_async(
+                            game_id,
+                            current_user["id"],
+                            message_data.content,
+                            current_user.get("name", ""),
+                            message.id,
+                        )
+                    )
+                    break
+            except redis.ResponseError as re:
+                logger.warning(f"Redis type error for game {game_key}: {re}")
+                continue
+    except Exception as e:
+        logger.warning(f"Failed to start async game answer processing: {e}")
 
     return MessageResponse(
         id=message.id,
