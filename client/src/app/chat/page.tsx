@@ -908,12 +908,12 @@ function MessageItem({
       } mb-1 px-2`}
     >
       <div
-        className={`flex flex-row items-end w-full ${
+        className={`flex flex-row items-start w-full ${
           isOwnMessageFunc ? "justify-end" : "justify-start"
         }`}
       >
         <div
-          className={`flex-shrink-0 ${
+          className={`flex-shrink-0 pt-2 ${
             isOwnMessageFunc ? "order-2 ml-2" : "order-1 mr-2"
           }`}
         >
