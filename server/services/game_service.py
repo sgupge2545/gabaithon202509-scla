@@ -308,15 +308,36 @@ class GameService:
                 return False
 
             room_id = game_data["room_id"]
+            current_question_index = int(game_data.get("current_question_index", 0))
+
+            # 現在の問題のタイマーIDを設定
+            timer_id = f"timer_{game_id}_{current_question_index}"
+            redis_client.set(f"game:{game_id}:current_timer", timer_id, ex=30)
 
             # 20秒のタイマーを開始
             for remaining in range(20, 0, -1):
                 await asyncio.sleep(1)
 
+                # タイマーが有効かチェック（正解が出て別のタイマーが開始された場合は停止）
+                current_timer = redis_client.get(f"game:{game_id}:current_timer")
+                if current_timer != timer_id:
+                    logging.info(
+                        f"Timer {timer_id} cancelled (current: {current_timer})"
+                    )
+                    return False
+
                 # ゲーム状態をチェック（ゲームが終了していたら停止）
                 current_game = GameService.get_game_info(game_id)
                 if not current_game or current_game["status"] != "playing":
                     break
+
+                # 問題インデックスが変わっていたら停止（正解が出て次の問題に進んだ場合）
+                if (
+                    int(current_game.get("current_question_index", 0))
+                    != current_question_index
+                ):
+                    logging.info(f"Question changed, stopping timer {timer_id}")
+                    return False
 
                 # タイマー更新を配信
                 await manager.broadcast(
@@ -327,10 +348,12 @@ class GameService:
                 if remaining == 11:
                     await GameService.send_hint(db, game_id)
 
-            # 時間切れの場合、次の問題へ
-            current_game = GameService.get_game_info(game_id)
-            if current_game and current_game["status"] == "playing":
-                await GameService.next_question(db, game_id)
+            # 時間切れの場合、次の問題へ（タイマーがまだ有効な場合のみ）
+            current_timer = redis_client.get(f"game:{game_id}:current_timer")
+            if current_timer == timer_id:
+                current_game = GameService.get_game_info(game_id)
+                if current_game and current_game["status"] == "playing":
+                    await GameService.next_question(db, game_id)
 
             return True
         except Exception as e:
@@ -558,6 +581,17 @@ class GameService:
                     },
                 )
 
+            # 正解の場合、解説を表示して5秒後に次の問題に進む
+            if grading_result["is_correct"]:
+                logging.info(
+                    f"Correct answer from {user_name or user_id}, showing explanation and moving to next question"
+                )
+                asyncio.create_task(
+                    GameService.handle_correct_answer(
+                        db, game_id, question_index, user_name or user_id
+                    )
+                )
+
             logging.info(
                 f"Answer submitted for game {game_id}, user {user_id}: {grading_result['score']} points"
             )
@@ -590,9 +624,71 @@ class GameService:
             )
 
     @staticmethod
+    async def handle_correct_answer(
+        db: Session, game_id: str, question_index: int, correct_user_name: str
+    ):
+        """正解者が出た時の処理：解説表示→5秒待機→次の問題"""
+        try:
+            # 現在のタイマーを無効化（新しいタイマーIDを設定して古いタイマーを停止）
+            invalidate_timer_id = f"invalidated_{game_id}_{question_index}"
+            redis_client.set(
+                f"game:{game_id}:current_timer", invalidate_timer_id, ex=30
+            )
+            logging.info(f"Invalidated timer for question {question_index}")
+
+            # 現在の問題を取得
+            questions_json = redis_client.get(f"game:{game_id}:questions")
+            if not questions_json:
+                logging.error(f"Questions not found for game {game_id}")
+                return
+
+            questions = json.loads(questions_json)
+            if question_index >= len(questions):
+                logging.error(
+                    f"Question index {question_index} out of range for game {game_id}"
+                )
+                return
+
+            question_data = questions[question_index]
+
+            # 解説メッセージを作成
+            explanation_content = f"""🎉 **正解！** 🎉
+
+**正解者**: {correct_user_name}
+**答え**: {question_data.get('reference_answer', '不明')}
+
+**解説**:
+{question_data.get('explanation', '解説がありません')}
+
+次の問題まで5秒お待ちください..."""
+
+            # 解説をAIメッセージとして送信
+            await GameService.send_ai_message(db, game_id, explanation_content)
+
+            # 5秒待機
+            await asyncio.sleep(5)
+
+            # 次の問題に進む
+            await GameService.next_question(db, game_id)
+
+        except Exception as e:
+            logging.error(f"Failed to handle correct answer for game {game_id}: {e}")
+            # エラーが発生した場合でも次の問題に進む
+            await GameService.next_question(db, game_id)
+
+    @staticmethod
     async def next_question(db: Session, game_id: str) -> bool:
         """次の問題に進む"""
         try:
+            # 重複実行防止のためのロック
+            lock_key = f"game:{game_id}:next_question_lock"
+            if redis_client.exists(lock_key):
+                logging.info(f"Next question already in progress for game {game_id}")
+                return False
+
+            # 2秒間のロック（処理時間を考慮）
+            redis_client.set(lock_key, "1", ex=2)
+
             game_data = redis_client.hgetall(f"game:{game_id}")
             current_index = int(game_data.get("current_question_index", 0))
             total_questions = int(game_data.get("total_questions", 0))
@@ -610,6 +706,8 @@ class GameService:
                 # ゲーム終了イベントを配信
                 await GameService.broadcast_game_status(game_id)
 
+                # ロック解除
+                redis_client.delete(lock_key)
                 return False
             else:
                 # 次の問題へ
@@ -626,10 +724,14 @@ class GameService:
                 # 新しい問題のタイマーを開始
                 asyncio.create_task(GameService.start_question_timer(db, game_id))
 
+                # ロック解除
+                redis_client.delete(lock_key)
                 return True
 
         except Exception as e:
             logging.error(f"Failed to advance to next question in game {game_id}: {e}")
+            # エラー時もロック解除
+            redis_client.delete(f"game:{game_id}:next_question_lock")
             return False
 
     @staticmethod

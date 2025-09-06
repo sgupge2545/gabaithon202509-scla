@@ -35,6 +35,7 @@ class QuizQuestion(BaseModel):
     question: str = Field(description="問題文")
     reference_answer: str = Field(description="正解例")
     hint: str = Field(description="ヒント")
+    explanation: str = Field(description="正解の解説")
     context: str = Field(description="問題の背景情報")
     source_chunk: str = Field(description="参照元のチャンク")
 
@@ -103,6 +104,7 @@ class LLMService:
 - 回答は簡潔に（1-3語程度が望ましい）
 - ヒントも含める
 - 問題の背景情報も含める
+- 正解の解説も含める（なぜその答えが正しいのかを説明）
 
 資料:
 {context_text}
@@ -114,6 +116,7 @@ class LLMService:
       "question": "問題文",
       "reference_answer": "正解例",
       "hint": "ヒント",
+      "explanation": "正解の解説（なぜその答えが正しいのかを説明）",
       "context": "問題の背景情報",
       "source_chunk": "参照元のチャンク（最初の50文字程度）"
     }}
@@ -181,6 +184,7 @@ class LLMService:
 - 回答は簡潔に（1-3語程度が望ましい）
 - ヒントも含める
 - 問題の背景情報も含める
+- 正解の解説も含める（なぜその答えが正しいのかを説明）
 - 一般的によく知られた内容から出題する
 
 以下のJSON形式で出力してください:
@@ -190,6 +194,7 @@ class LLMService:
       "question": "問題文",
       "reference_answer": "正解例",
       "hint": "ヒント",
+      "explanation": "正解の解説（なぜその答えが正しいのかを説明）",
       "context": "問題の背景情報",
       "source_chunk": "一般知識"
     }}
