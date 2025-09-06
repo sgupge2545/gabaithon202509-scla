@@ -59,76 +59,58 @@ export default function Login() {
         component="h1" 
         gutterBottom 
         sx={{ 
-          fontWeight: 900,
+          fontWeight: { xs: 500, sm: 700 },
           color: 'transparent',
           background: 'linear-gradient(135deg, #fff 0%, #e0e7ff 50%, #a5b4fc 100%)',
           backgroundClip: 'text',
           WebkitBackgroundClip: 'text',
           textAlign: 'center',
-          mb: 22,
           letterSpacing: '0.1em',
           position: 'relative',
           zIndex: 1,
+          mt: { xs: 0, sm: '2%', md: '4%' }
         }}
       >
-        アプリ名
+        Ludus
       </Typography>
 
       {/* 装飾的なアイコン群 */}
       <Box
         sx={{
-          position: 'absolute',
-          top: { xs: '32%', sm: '28%', md: '28%' },
-          left: '50%',
-          zIndex: 0,
+          position: 'relative',
+          display: 'flex',
+          zIndex: 1,
           opacity: 0.5,
-          transform: 'translateX(-50%)',
+          mb: { xs: '14.9%', sm: '10%', md: '7%' }
         }}
       >
         <ChatIcon 
           sx={{ 
-            fontSize: { xs: 60, sm: 80, md: 90 },
+            fontSize: { xs: 70, sm: 80, md: 90 },
             color: 'rgba(120, 119, 198, 0.8)',  
           }} 
         />
         <AddIcon 
           sx={{ 
-            fontSize: { xs: 50, sm: 70, md: 80 }, 
+            fontSize: { xs: 60, sm: 70, md: 80 }, 
             color: 'white',
             transform: 'rotate(45deg)'
           }} 
         />
         <PsychologyIcon 
           sx={{ 
-            fontSize: { xs: 60, sm: 80, md: 90 }, 
+            fontSize: { xs: 70, sm: 80, md: 90 }, 
             color: 'rgba(255, 119, 198, 0.8)',
           }} 
         />
       </Box>
 
-      <Paper
-        elevation={0}
-        sx={{
-          padding: 7,
-          borderRadius: '24px',
-          minWidth: 400,
-          textAlign: 'center',
-          background: 'rgba(255,255,255,0.08)',
-          backdropFilter: 'blur(20px)',
-          border: '1px solid rgba(255,255,255,0.1)',
-          position: 'relative',
-          zIndex: 1,
-          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
-        }}
-      >
-        <AccountCircleIcon 
+      <AccountCircleIcon 
           sx={{
-            fontSize: 140,
+            fontSize: { xs: 120, sm: 130, md: 140 },
             color: 'rgba(255,255,255,0.9)',
-            mb: 3,
-            position: 'absolute',
-            top: '-40%',
-            left: '130px',
+            position: 'fixed',
+            zIndex: 10,
             filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.3))',
             transition: 'all 0.3s ease',
             '&:hover': {
@@ -138,17 +120,33 @@ export default function Login() {
             }
           }}
         />
-        
+
+      <Paper
+        elevation={0}
+        sx={{
+          padding: { xs: 5.5, sm: 6.0, md: 7 },
+          mb: { xs: '5.6%', sm: '6%', md: '7%' },
+          borderRadius: '24px',
+          width: { xs: '300px', sm: '365px', md: '400px' },
+          textAlign: 'center',
+          background: 'rgba(255,255,255,0.08)',
+          backdropFilter: 'blur(20px)',
+          border: '1px solid rgba(255,255,255,0.1)',
+          position: 'relative',
+          zIndex: 1,
+          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+        }}
+      >
         <Button
           variant="contained"
           size="large"
           startIcon={<FcGoogle />}
           sx={{
             mt: 2,
-            px: 6,
+            px: { xs: 3.0, sm: 4.5, md: 6.0 },
             py: 2,
-            fontWeight: 700,
-            fontSize: '1.1rem',
+            fontWeight: 400,
+            fontSize: '1rem',
             textTransform: 'none',
             background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
             borderRadius: '16px',
@@ -179,7 +177,12 @@ export default function Login() {
             }
           }}
         >
-          Googleでログイン
+          <Box component="span" sx={{ display: { xs: 'block', sm: 'none' } }}>
+            ログイン
+          </Box>
+          <Box component="span" sx={{ display: { xs: 'none', sm: 'block' } }}>
+            Googleでログイン
+          </Box>
         </Button>
       </Paper>
     </Box>
