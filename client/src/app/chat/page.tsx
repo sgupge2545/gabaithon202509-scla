@@ -35,22 +35,7 @@ export default function ChatPage() {
   // 採点結果管理
   const [gradingResults, setGradingResults] = useState<
     Record<string, GradingResult | { loading: boolean }>
-  >({
-    // ダミーデータ: 採点中のUI確認用
-    dummy_loading_1: { loading: true },
-    dummy_correct_1: {
-      is_correct: true,
-      score: 10,
-      feedback: "正確な回答です！",
-      user_name: "テストユーザー",
-    },
-    dummy_incorrect_1: {
-      is_correct: false,
-      score: 0,
-      feedback: "惜しいです。もう少し具体的に答えてください。",
-      user_name: "テストユーザー",
-    },
-  });
+  >({});
 
   const { user } = useAuth();
   const { leaveRoom, currentRoom, initialized } = useRoom();
@@ -788,16 +773,6 @@ export default function ChatPage() {
             ) {
               const messageId = `answer_${currentGameId}_${gameState.gameStatus.current_question_index}_${user?.id}`;
               gradingResult = gradingResults[messageId];
-            }
-
-            // ダミーデータ表示用（UI確認）
-            if (message.user?.id === user?.id && index < 3) {
-              const dummyKeys = [
-                "dummy_loading_1",
-                "dummy_correct_1",
-                "dummy_incorrect_1",
-              ];
-              gradingResult = gradingResults[dummyKeys[index]];
             }
 
             return (
