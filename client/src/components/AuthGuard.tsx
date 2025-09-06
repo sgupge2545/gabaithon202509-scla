@@ -1,7 +1,7 @@
 "use client";
 
 import { useAuth } from "@/contexts/AuthContext";
-import LoginScreen from "./LoginScreen";
+import Login from "./Login";
 
 interface AuthGuardProps {
   children: React.ReactNode;
@@ -19,7 +19,7 @@ export default function AuthGuard({ children }: AuthGuardProps) {
   }
 
   if (!user) {
-    return <LoginScreen />;
+    return <Login />;
   }
 
   return <>{children}</>;
