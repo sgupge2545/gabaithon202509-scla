@@ -1,6 +1,6 @@
 export interface GameStatus {
   game_id: string;
-  status: "generating" | "ready" | "playing" | "finished";
+  status: "generating" | "ready" | "playing" | "waiting_next" | "finished";
   current_question_index: number;
   total_questions: number;
   time_remaining?: number;

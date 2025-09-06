@@ -457,6 +457,15 @@ export default function ChatPage() {
                     </Badge>
                   </div>
                 )}
+                {gameState.gameStatus.status === "waiting_next" && (
+                  <div className="flex items-center space-x-2">
+                    <Badge variant="secondary">
+                      問題 {gameState.gameStatus.current_question_index + 1}/
+                      {gameState.gameStatus.total_questions}
+                    </Badge>
+                    <Badge variant="outline">次の問題を準備中...</Badge>
+                  </div>
+                )}
                 {gameState.gameStatus.status === "ready" && (
                   <Button onClick={startChatGame} size="sm">
                     <FaPlay className="h-4 w-4 mr-2" />
@@ -857,18 +866,29 @@ export default function ChatPage() {
         <div className="flex items-end space-x-3">
           <div className="flex-1 relative">
             <Textarea
-              placeholder="メッセージを入力..."
+              placeholder={
+                gameState.gameStatus?.status === "waiting_next"
+                  ? "正解者が出ました！次の問題をお待ちください..."
+                  : "メッセージを入力..."
+              }
               value={newMessage}
               onChange={(e) => setNewMessage(e.target.value)}
               onKeyPress={handleKeyPress}
-              disabled={sendingMessage}
+              disabled={
+                sendingMessage ||
+                gameState.gameStatus?.status === "waiting_next"
+              }
               className="min-h-[44px] max-h-32 resize-none rounded-2xl border-slate-300 dark:border-slate-600 focus:border-blue-500 dark:focus:border-blue-400 pr-12"
               rows={1}
             />
           </div>
           <Button
             onClick={sendMessage}
-            disabled={!newMessage.trim() || sendingMessage}
+            disabled={
+              !newMessage.trim() ||
+              sendingMessage ||
+              gameState.gameStatus?.status === "waiting_next"
+            }
             className="h-11 w-11 rounded-full bg-blue-500 hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-700 transition-colors"
             size="icon"
           >

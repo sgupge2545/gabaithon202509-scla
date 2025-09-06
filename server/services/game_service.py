@@ -48,7 +48,7 @@ class GameService:
         game_data = {
             "room_id": room_id,
             "host_user_id": host_user_id,
-            "status": "preparing",  # preparing -> playing -> finished
+            "status": "preparing",  # preparing -> playing -> waiting_next -> finished
             "current_question_index": "0",
             "total_questions": "0",
             "created_at": datetime.now().isoformat(),
@@ -600,6 +600,14 @@ class GameService:
     ) -> Optional[Dict]:
         """回答を提出して採点"""
         try:
+            # ゲーム状態をチェック - playing状態でない場合は回答を受け付けない
+            game_data = GameService.get_game_info(game_id)
+            if not game_data or game_data.get("status") != "playing":
+                logging.info(
+                    f"Game {game_id} is not accepting answers (status: {game_data.get('status') if game_data else 'not found'})"
+                )
+                return None
+
             # 後から入った人を自動的にゲームに参加させる
             GameService.add_participant_to_game(game_id, user_id)
 
@@ -655,11 +663,15 @@ class GameService:
                     },
                 )
 
-            # 正解の場合、解説を表示して5秒後に次の問題に進む
+            # 正解の場合、回答受付を停止して解説を表示し、5秒後に次の問題に進む
             if grading_result["is_correct"]:
                 logging.info(
-                    f"Correct answer from {user_name or user_id}, showing explanation and moving to next question"
+                    f"Correct answer from {user_name or user_id}, stopping answer acceptance and showing explanation"
                 )
+                # ゲーム状態を「次の問題待ち」に変更して回答受付を停止
+                redis_client.hset(f"game:{game_id}", "status", "waiting_next")
+                await GameService.broadcast_game_status(game_id)
+
                 asyncio.create_task(
                     GameService.handle_correct_answer(
                         db, game_id, question_index, user_name or user_id
@@ -843,7 +855,11 @@ class GameService:
             else:
                 # 次の問題へ
                 redis_client.hset(
-                    f"game:{game_id}", "current_question_index", str(current_index + 1)
+                    f"game:{game_id}",
+                    mapping={
+                        "current_question_index": str(current_index + 1),
+                        "status": "playing",  # 新しい問題開始時に回答受付を再開
+                    },
                 )
 
                 # 次の問題を送信
