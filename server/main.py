@@ -3,6 +3,7 @@ import os
 
 from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
@@ -67,6 +68,13 @@ app.include_router(messages.router, prefix="/api/rooms", tags=["messages"])
 app.include_router(game.router, prefix="/api/game", tags=["game"])
 app.include_router(docs.router, prefix="/api/docs", tags=["docs"])
 
-# Serve exported Next.js static files (only if directory exists)
 if os.path.exists("client/out"):
-    app.mount("/", StaticFiles(directory="client/out", html=True), name="static")
+
+    class SPAStaticFiles(StaticFiles):
+        async def get_response(self, path: str, scope):
+            try:
+                return await super().get_response(path, scope)
+            except Exception:
+                return FileResponse(os.path.join(self.directory, "index.html"))
+
+    app.mount("/", SPAStaticFiles(directory="client/out", html=True), name="static")

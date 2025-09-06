@@ -2,6 +2,8 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: "export",
+  trailingSlash: true,
+  skipTrailingSlashRedirect: true,
 
   // 画像最適化の設定
   images: {
