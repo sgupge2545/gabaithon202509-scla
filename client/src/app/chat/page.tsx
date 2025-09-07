@@ -20,6 +20,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
 import { useRoomSocket } from "@/hooks/useRoomSocket";
 import { useGameApi } from "@/hooks/useGameApi";
 import type { GradingResult, GameEvent } from "@/types/game";
@@ -418,7 +419,8 @@ export default function ChatPage() {
     <div className="h-screen flex flex-col">
       <Card className="rounded-none border-b border-t-0 border-l-0 border-r-0">
         <CardContent className="p-4">
-          <div className="flex items-center space-x-4">
+          {/* 基本情報行 */}
+          <div className="flex items-center space-x-4 mb-3">
             <Button variant="ghost" size="icon" onClick={handleBack}>
               <FaArrowLeft className="h-4 w-4" />
             </Button>
@@ -442,30 +444,6 @@ export default function ChatPage() {
             </div>
             {gameState.gameStatus ? (
               <div className="ml-auto flex items-center space-x-4">
-                {gameState.gameStatus.status === "playing" && (
-                  <div className="flex items-center space-x-2">
-                    <Badge variant="secondary">
-                      問題 {gameState.gameStatus.current_question_index + 1}/
-                      {gameState.gameStatus.total_questions}
-                    </Badge>
-                    <Badge
-                      variant={
-                        gameState.timeRemaining > 10 ? "default" : "destructive"
-                      }
-                    >
-                      残り {gameState.timeRemaining}秒
-                    </Badge>
-                  </div>
-                )}
-                {gameState.gameStatus.status === "waiting_next" && (
-                  <div className="flex items-center space-x-2">
-                    <Badge variant="secondary">
-                      問題 {gameState.gameStatus.current_question_index + 1}/
-                      {gameState.gameStatus.total_questions}
-                    </Badge>
-                    <Badge variant="outline">次の問題を準備中...</Badge>
-                  </div>
-                )}
                 {gameState.gameStatus.status === "ready" && (
                   <Button onClick={startChatGame} size="sm">
                     <FaPlay className="h-4 w-4 mr-2" />
@@ -476,13 +454,10 @@ export default function ChatPage() {
                   <Badge variant="outline">問題生成中...</Badge>
                 )}
                 {gameState.gameStatus.status === "finished" && (
-                  <div className="flex items-center space-x-2">
-                    <Badge variant="secondary">ゲーム終了</Badge>
-                    <Button onClick={startGame} size="sm" variant="outline">
-                      <FaPlay className="h-4 w-4 mr-2" />
-                      新しいゲーム
-                    </Button>
-                  </div>
+                  <Button onClick={startGame} size="sm" variant="outline">
+                    <FaPlay className="h-4 w-4 mr-2" />
+                    新しいゲーム
+                  </Button>
                 )}
               </div>
             ) : (
@@ -492,6 +467,79 @@ export default function ChatPage() {
               </Button>
             )}
           </div>
+
+          {/* ゲーム進行情報行 */}
+          {gameState.gameStatus &&
+            (gameState.gameStatus.status === "playing" ||
+              gameState.gameStatus.status === "waiting_next") && (
+              <div className="space-y-3">
+                {/* 問題番号とタイマー */}
+                <div className="flex items-center justify-between">
+                  <Badge variant="secondary" className="text-sm">
+                    問題 {gameState.gameStatus.current_question_index + 1} /{" "}
+                    {gameState.gameStatus.total_questions}
+                  </Badge>
+                  {gameState.gameStatus.status === "playing" && (
+                    <div className="text-sm font-medium">
+                      残り {gameState.timeRemaining}秒
+                    </div>
+                  )}
+                  {gameState.gameStatus.status === "waiting_next" && (
+                    <Badge variant="outline" className="text-sm">
+                      次の問題を準備中...
+                    </Badge>
+                  )}
+                </div>
+
+                {/* プログレスバー */}
+                {gameState.gameStatus.status === "playing" && (
+                  <div className="w-full">
+                    <Progress
+                      value={(gameState.timeRemaining / 20) * 100}
+                      className="h-3"
+                      indicatorClassName={
+                        gameState.timeRemaining <= 5
+                          ? "bg-red-500"
+                          : gameState.timeRemaining <= 10
+                          ? "bg-yellow-500"
+                          : "bg-green-500"
+                      }
+                    />
+                  </div>
+                )}
+
+                {/* 点数表示 */}
+                {gameState.gameStatus.scores &&
+                  Object.keys(gameState.gameStatus.scores).length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {Object.entries(gameState.gameStatus.scores)
+                        .sort(([, a], [, b]) => (b as number) - (a as number))
+                        .map(([userId, score], index) => {
+                          // ユーザー名を取得（参加者情報から）
+                          const userName =
+                            currentRoom.members?.find((m) => m.id === userId)
+                              ?.name || `ユーザー${userId.slice(-4)}`;
+                          const isCurrentUser = userId === user?.id;
+
+                          return (
+                            <Badge
+                              key={userId}
+                              variant={isCurrentUser ? "default" : "secondary"}
+                              className={`text-xs ${
+                                index === 0
+                                  ? "bg-yellow-500 text-yellow-50"
+                                  : ""
+                              }`}
+                            >
+                              {index === 0 && "👑 "}
+                              {userName}: {score}点
+                            </Badge>
+                          );
+                        })}
+                    </div>
+                  )}
+              </div>
+            )}
         </CardContent>
       </Card>
 

@@ -155,25 +155,43 @@ async def get_messages(
 @router.websocket("/{room_id}/ws")
 async def websocket_endpoint(websocket: WebSocket, room_id: str):
     """WebSocket 接続: room_id ごとにクライアントを管理する"""
-    await manager.connect(room_id, websocket)
     try:
-        while True:
-            # クライアントからのメッセージを待機
-            message = await websocket.receive_text()
+        # 接続をマネージャーに登録（accept()も含む）
+        await manager.connect(room_id, websocket)
+        logger.info(f"WebSocket connected for room {room_id}")
 
+        while True:
             try:
-                # JSONメッセージの場合、ハートビートに対応
-                data = json.loads(message)
-                if data.get("type") == "ping":
-                    # ハートビートに応答
-                    await websocket.send_text(json.dumps({"type": "pong"}))
-                    continue
-            except (json.JSONDecodeError, KeyError):
-                # JSON以外のメッセージは無視
-                pass
+                # クライアントからのメッセージを待機
+                message = await websocket.receive_text()
+
+                try:
+                    # JSONメッセージの場合、ハートビートに対応
+                    data = json.loads(message)
+                    if data.get("type") == "ping":
+                        # ハートビートに応答
+                        await websocket.send_text(json.dumps({"type": "pong"}))
+                        continue
+                except (json.JSONDecodeError, KeyError):
+                    # JSON以外のメッセージは無視
+                    pass
+
+            except Exception as e:
+                logger.error(
+                    f"Error processing WebSocket message for room {room_id}: {e}"
+                )
+                break
 
     except WebSocketDisconnect:
-        await manager.disconnect(room_id, websocket)
+        logger.info(f"WebSocket disconnected for room {room_id}")
+    except Exception as e:
+        logger.error(f"WebSocket error for room {room_id}: {e}")
+    finally:
+        # 接続をクリーンアップ
+        try:
+            await manager.disconnect(room_id, websocket)
+        except Exception as e:
+            logger.warning(f"Error during WebSocket cleanup for room {room_id}: {e}")
 
 
 @router.post("/{room_id}/messages", response_model=MessageResponse)
