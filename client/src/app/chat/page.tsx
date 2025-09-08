@@ -20,8 +20,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { useRoomSocket } from "@/hooks/useRoomSocket";
 import { useGameApi } from "@/hooks/useGameApi";
+import { useRoomSocket } from "@/hooks/useRoomSocket";
 import type { GradingResult, GameEvent } from "@/types/game";
 import UploadModal from "@/components/UploadModal";
 import DocumentModal from "@/components/DocumentModal";
@@ -448,7 +448,7 @@ export default function ChatPage() {
 
   return (
     <div className="h-screen flex flex-col">
-      <Card className="rounded-none border-b border-t-0 border-l-0 border-r-0">
+      <Card className="text-white rounded-none border-b border-t-0 border-l-0 border-r-0 bg-gradient-to-br from-[#0f0f23] to-[#533483]">
         <CardContent className="p-4">
           {/* 基本情報行 */}
           <div className="flex items-center space-x-4 mb-3">
@@ -460,7 +460,7 @@ export default function ChatPage() {
               <div className="flex items-center space-x-2 mt-1">
                 <Badge
                   variant="outline"
-                  className="flex items-center space-x-1"
+                  className="flex items-center space-x-1 text-white"
                 >
                   <FaUsers className="h-3 w-3" />
                   <span>
@@ -860,6 +860,7 @@ export default function ChatPage() {
 
               <div className="flex justify-end">
                 <Button
+                  className="bg-purple-500"
                   type="button"
                   onClick={confirmStartGame}
                   disabled={
@@ -876,7 +877,7 @@ export default function ChatPage() {
         </div>
       )}
 
-      <div className="flex-1 overflow-auto p-2 bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
+      <div className="flex-1 overflow-auto p-2 bg-gradient-to-br from-[#533483] to-[#9c74d8]">
         <div className="space-y-3">
           {messages.map((message, index) => {
             const prevMessage = messages[index - 1];
@@ -1074,7 +1075,7 @@ function MessageItem({
           <div
             className={`relative px-4 py-2 rounded-2xl max-w-md break-words ${
               isOwnMessageFunc
-                ? "bg-blue-500 text-white rounded-br-md"
+                ? "bg-purple-500 text-white rounded-br-md"
                 : "bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-600 rounded-bl-md"
             }`}
           >
