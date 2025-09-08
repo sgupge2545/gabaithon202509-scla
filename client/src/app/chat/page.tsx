@@ -556,7 +556,7 @@ export default function ChatPage() {
             ) : (
               <Button
                 onClick={startGame}
-                className="ml-auto"
+                className="ml-auto bg-gradient-to-br from-[#9a15f8] to-[#f86510]"
                 disabled={startingGame}
               >
                 {startingGame ? (
@@ -1085,9 +1085,11 @@ function MessageItem({
         >
           {showAvatar && message.user ? (
             <Avatar className="w-8 h-8">
-              {message.user.picture && (
+              {message.user.name === "Ludus" ? (
+                <AvatarImage src="/ludus.png" />
+              ) : message.user.picture ? (
                 <AvatarImage src={message.user.picture} />
-              )}
+              ) : null}
               <AvatarFallback
                 className={`text-xs ${
                   isOwnMessageFunc
