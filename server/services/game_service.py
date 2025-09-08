@@ -604,6 +604,20 @@ class GameService:
         message_id: str = "",
     ) -> Optional[Dict]:
         """回答を提出して採点"""
+        # 回答処理の排他制御（同じ問題に対する同時回答を防ぐ）
+        answer_processing_lock = f"game:{game_id}:answer_processing"
+
+        # 最大3秒待機してロックを取得
+        for _ in range(30):  # 0.1秒 × 30回 = 3秒
+            if redis_client.set(answer_processing_lock, user_id, ex=10, nx=True):
+                break
+            await asyncio.sleep(0.1)
+        else:
+            logging.warning(
+                f"Could not acquire answer processing lock for game {game_id}"
+            )
+            return None
+
         try:
             # ゲーム状態をチェック - playing状態でない場合は回答を受け付けない
             game_data = GameService.get_game_info(game_id)
@@ -623,13 +637,49 @@ class GameService:
 
             question_index = current_question["question_index"]
 
-            # LLMで採点
-            grading_result = await llm_service.grade_answer(
-                question=current_question["question"],
-                reference_answer=current_question["reference_answer"],
-                user_answer=answer,
-                context=current_question.get("context", ""),
+            # 既に正解者が出ているかチェック
+            correct_lock_key = (
+                f"game:{game_id}:question:{question_index}:correct_processing"
             )
+            has_correct_answer = redis_client.exists(correct_lock_key)
+
+            if has_correct_answer:
+                logging.info(
+                    f"Question {question_index} already has a correct answer, forcing incorrect result"
+                )
+                # 既に正解者がいる場合は強制的に不正解にする
+                grading_result = {
+                    "is_correct": False,
+                    "score": 0,
+                    "feedback": "この問題は既に正解者が出ています。",
+                    "reasoning": "既に他のユーザーが正解しているため、この回答は不正解として処理されます。",
+                }
+            else:
+                # LLMで採点
+                grading_result = await llm_service.grade_answer(
+                    question=current_question["question"],
+                    reference_answer=current_question["reference_answer"],
+                    user_answer=answer,
+                    context=current_question.get("context", ""),
+                )
+
+                # 正解の場合、即座にロックを設定して他の正解を防ぐ
+                if grading_result["is_correct"]:
+                    # ロックが既に存在するかチェック（他のユーザーが先に正解した可能性）
+                    lock_set = redis_client.set(
+                        correct_lock_key, user_id, ex=300, nx=True
+                    )
+                    if not lock_set:
+                        # 他のユーザーが先に正解していた場合、この回答を不正解に変更
+                        logging.info(
+                            f"Another user already got correct answer for question {question_index}, changing to incorrect"
+                        )
+                        grading_result = {
+                            "is_correct": False,
+                            "score": 0,
+                            "feedback": "この問題は既に正解者が出ています。",
+                            "reasoning": "他のユーザーが先に正解したため、この回答は不正解として処理されます。",
+                        }
 
             # 回答をRedisに保存
             answer_data = {
@@ -683,6 +733,7 @@ class GameService:
                 logging.info(
                     f"Correct answer from {user_name or user_id}, stopping answer acceptance and showing explanation"
                 )
+
                 # ゲーム状態を「次の問題待ち」に変更して回答受付を停止
                 redis_client.hset(f"game:{game_id}", "status", "waiting_next")
                 await GameService.broadcast_game_status(game_id)
@@ -701,6 +752,9 @@ class GameService:
         except Exception as e:
             logging.error(f"Failed to submit answer for game {game_id}: {e}")
             return None
+        finally:
+            # 回答処理ロックを解除
+            redis_client.delete(answer_processing_lock)
 
     @staticmethod
     def _update_user_score(
@@ -752,6 +806,16 @@ class GameService:
     @staticmethod
     async def handle_timeout(db: Session, game_id: str, question_index: int):
         """時間切れの処理：正解表示→3秒待機→次の問題"""
+        # タイムアウト処理の排他制御（同じ問題に対して一度だけ実行）
+        timeout_lock_key = f"game:{game_id}:question:{question_index}:handle_timeout"
+
+        # ロックが既に存在する場合は処理をスキップ
+        if not redis_client.set(timeout_lock_key, "timeout", ex=60, nx=True):
+            logging.info(
+                f"handle_timeout already in progress for question {question_index}, skipping"
+            )
+            return
+
         try:
             # 現在のタイマーを無効化
             invalidate_timer_id = f"timeout_{game_id}_{question_index}"
@@ -798,12 +862,25 @@ class GameService:
             logging.error(f"Failed to handle timeout for game {game_id}: {e}")
             # エラーが発生した場合でも次の問題に進む
             await GameService.next_question(db, game_id)
+        finally:
+            # タイムアウト処理ロックを解除
+            redis_client.delete(timeout_lock_key)
 
     @staticmethod
     async def handle_correct_answer(
         db: Session, game_id: str, question_index: int, correct_user_name: str
     ):
         """正解者が出た時の処理：解説表示→5秒待機→次の問題"""
+        # 正解処理の排他制御（同じ問題に対して一度だけ実行）
+        handle_lock_key = f"game:{game_id}:question:{question_index}:handle_correct"
+
+        # ロックが既に存在する場合は処理をスキップ
+        if not redis_client.set(handle_lock_key, correct_user_name, ex=60, nx=True):
+            logging.info(
+                f"handle_correct_answer already in progress for question {question_index}, skipping"
+            )
+            return
+
         try:
             # 現在のタイマーを無効化（新しいタイマーIDを設定して古いタイマーを停止）
             invalidate_timer_id = f"invalidated_{game_id}_{question_index}"
@@ -851,6 +928,9 @@ class GameService:
             logging.error(f"Failed to handle correct answer for game {game_id}: {e}")
             # エラーが発生した場合でも次の問題に進む
             await GameService.next_question(db, game_id)
+        finally:
+            # 正解処理ロックを解除
+            redis_client.delete(handle_lock_key)
 
     @staticmethod
     def get_game_ranking(game_id: str, db: Session = None) -> List[Dict]:
@@ -998,6 +1078,20 @@ class GameService:
                 redis_client.delete(lock_key)
                 return False
             else:
+                # 前の問題の各種ロックをクリア
+                prev_correct_lock_key = (
+                    f"game:{game_id}:question:{current_index}:correct_processing"
+                )
+                prev_handle_correct_lock_key = (
+                    f"game:{game_id}:question:{current_index}:handle_correct"
+                )
+                prev_timeout_lock_key = (
+                    f"game:{game_id}:question:{current_index}:handle_timeout"
+                )
+                redis_client.delete(prev_correct_lock_key)
+                redis_client.delete(prev_handle_correct_lock_key)
+                redis_client.delete(prev_timeout_lock_key)
+
                 # 次の問題へ
                 redis_client.hset(
                     f"game:{game_id}",

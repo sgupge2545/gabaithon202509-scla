@@ -448,8 +448,8 @@ export default function ChatPage() {
 
   return (
     <div className="h-screen flex flex-col">
-      <Card className="text-white rounded-none border-b border-t-0 border-l-0 border-r-0 bg-gradient-to-br from-[#0f0f23] to-[#533483]">
-        <CardContent className="p-4">
+      <div className="text-white rounded-none border-b border-t-0 border-l-0 border-r-0 bg-gradient-to-br from-[#0f0f23] to-[#533483]">
+        <div className="p-4">
           {/* 基本情報行 */}
           <div className="flex items-center space-x-4 mb-3">
             <Button variant="ghost" size="icon" onClick={handleBack}>
@@ -601,8 +601,8 @@ export default function ChatPage() {
                   )}
               </div>
             )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {gameDialogOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
