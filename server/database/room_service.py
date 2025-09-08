@@ -179,6 +179,13 @@ def join_room(
         db_member = RoomMember(room_id=room_id, user_id=user_id)
         db.add(db_member)
         db.commit()
+        # 入室ログメッセージ保存
+        from ..services.message_service import create_message
+
+        user = db.query(User).filter(User.id == user_id).first()
+        user_name = user.name if user else ""
+        content = f"{user_name} 入室しました"
+        create_message(db, room_id, user_id, content)
         return True
     except Exception:
         db.rollback()
