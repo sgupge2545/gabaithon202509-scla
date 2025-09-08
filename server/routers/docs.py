@@ -275,9 +275,32 @@ async def get_document_file(
 
     # ファイルが存在するかチェック
     if not doc.storage_uri or not os.path.exists(doc.storage_uri):
-        raise HTTPException(status_code=404, detail="ファイルが見つかりません")
+        # 古いドキュメントでファイルが物理的に存在しない場合
+        logging.warning(f"File not found for document {doc_id}: {doc.storage_uri}")
+        raise HTTPException(
+            status_code=404,
+            detail="ファイルが見つかりません。このドキュメントは古いバージョンでアップロードされた可能性があります。",
+        )
 
-    # ファイルを返す
-    return FileResponse(
+    # ファイルを返す（インライン表示用）
+    response = FileResponse(
         path=doc.storage_uri, filename=doc.filename, media_type=doc.mime_type
     )
+    # インライン表示を指定（ダウンロードではなくブラウザで表示）
+    # 日本語ファイル名に対応するためRFC 5987形式を使用
+    try:
+        # ASCII文字のみの場合は通常の形式
+        doc.filename.encode("ascii")
+        response.headers["Content-Disposition"] = f'inline; filename="{doc.filename}"'
+    except UnicodeEncodeError:
+        # 日本語などの非ASCII文字が含まれる場合はRFC 5987形式
+        import urllib.parse
+
+        encoded_filename = urllib.parse.quote(doc.filename, safe="")
+        response.headers[
+            "Content-Disposition"
+        ] = f"inline; filename*=UTF-8''{encoded_filename}"
+    # ブラウザでの表示を改善するためのヘッダー
+    response.headers["Cache-Control"] = "public, max-age=3600"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    return response

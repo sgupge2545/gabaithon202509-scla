@@ -132,8 +132,15 @@ class AIChatService:
                         context_parts = []
                         referenced_docs = set()  # 参考にした資料のファイル名を記録
 
+                        # デバッグ用：全ての類似度をログ出力
+                        logger.info(
+                            f"Similarity scores for query '{user_message[:30]}...': {[(chunk.id[:8], round(sim, 3)) for chunk, sim in relevant_chunks[:3]]}"
+                        )
+
                         for chunk, similarity in relevant_chunks:
-                            if similarity > 0.3:  # 類似度の閾値
+                            if (
+                                similarity > 0.5
+                            ):  # 類似度の閾値を上げて、より関連性の高い資料のみを参考にする
                                 # チャンクから関連するドキュメントを取得
                                 doc = (
                                     db.query(Doc).filter(Doc.id == chunk.doc_id).first()
@@ -150,6 +157,18 @@ class AIChatService:
 
                                     context_parts.append(
                                         f"[資料: {doc.filename}] {chunk.content[:300]}..."
+                                    )
+                                    logger.info(
+                                        f"Using document '{doc.filename}' with similarity {round(similarity, 3)}"
+                                    )
+                            else:
+                                # 閾値以下の資料はログに記録のみ
+                                doc = (
+                                    db.query(Doc).filter(Doc.id == chunk.doc_id).first()
+                                )
+                                if doc:
+                                    logger.info(
+                                        f"Skipping document '{doc.filename}' with low similarity {round(similarity, 3)}"
                                     )
 
                         if context_parts:

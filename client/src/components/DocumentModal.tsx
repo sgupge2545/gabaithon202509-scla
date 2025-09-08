@@ -1,8 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import Image from "next/image";
-import { FaTimes, FaDownload, FaExternalLinkAlt } from "react-icons/fa";
+import { FaTimes, FaDownload } from "react-icons/fa";
 import { Button } from "./ui/button";
 
 interface DocumentModalProps {
@@ -24,8 +23,7 @@ export default function DocumentModal({
 
   if (!isOpen) return null;
 
-  const base = process.env.NEXT_PUBLIC_API_BASE_URL || "";
-  const fileUrl = `${base}/api/docs/file/${docId}`;
+  const fileUrl = `/api/docs/file/${docId}`;
   const isPdf = filename.toLowerCase().endsWith(".pdf");
   const isImage = /\.(jpg|jpeg|png|gif|bmp|webp)$/i.test(
     filename.toLowerCase()
@@ -66,28 +64,21 @@ export default function DocumentModal({
     }
   };
 
-  const handleViewInNewTab = () => {
-    window.open(fileUrl, "_blank");
-  };
-
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-slate-800 rounded-lg w-full max-w-4xl h-full max-h-[90vh] flex flex-col">
+    <div
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white dark:bg-slate-800 rounded-lg w-full max-w-4xl h-full max-h-[90vh] flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* ヘッダー */}
         <div className="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-600">
           <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100 truncate">
             {filename}
           </h2>
           <div className="flex items-center gap-2">
-            <Button
-              onClick={handleViewInNewTab}
-              variant="outline"
-              size="sm"
-              disabled={loading}
-            >
-              <FaExternalLinkAlt className="mr-1 h-3 w-3" />
-              新しいタブ
-            </Button>
             <Button
               onClick={handleDownload}
               variant="outline"
@@ -118,7 +109,7 @@ export default function DocumentModal({
         </div>
 
         {/* コンテンツエリア */}
-        <div className="flex-1 p-4">
+        <div className="flex-1 p-4 overflow-hidden">
           {error && (
             <div className="p-3 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-lg mb-4">
               <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
@@ -137,31 +128,35 @@ export default function DocumentModal({
                   </div>
                 </div>
               )}
-              <iframe
-                src={fileUrl}
-                className="w-full h-full border-0 rounded-lg"
-                title={filename}
+              <object
+                data={fileUrl}
+                type="application/pdf"
+                className="w-full h-full rounded-lg"
                 onLoad={() => setIsPdfLoaded(true)}
-                onError={() => {
-                  setError("PDFの読み込みに失敗しました");
-                  setIsPdfLoaded(true);
-                }}
-              />
+              >
+                <iframe
+                  src={`${fileUrl}#toolbar=0&navpanes=0&scrollbar=0`}
+                  className="w-full h-full border-0 rounded-lg"
+                  title={filename}
+                  onLoad={() => setIsPdfLoaded(true)}
+                  onError={() => {
+                    setError("PDFの読み込みに失敗しました");
+                    setIsPdfLoaded(true);
+                  }}
+                />
+              </object>
             </div>
           ) : isImage ? (
-            <div className="w-full h-full bg-slate-50 dark:bg-slate-700 rounded-lg overflow-auto">
-              <div className="min-h-full flex items-center justify-center p-4">
-                <Image
+            <div className="w-full h-full bg-slate-50 dark:bg-slate-700 rounded-lg overflow-auto relative">
+              <div className="absolute inset-0 p-4 overflow-auto">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
                   src={fileUrl}
                   alt={filename}
-                  width={0}
-                  height={0}
-                  sizes="100vw"
-                  className="max-w-full h-auto rounded-lg"
+                  className="w-full h-auto rounded-lg block"
                   onError={() => {
                     setError("画像の読み込みに失敗しました");
                   }}
-                  unoptimized
                 />
               </div>
             </div>
@@ -173,10 +168,6 @@ export default function DocumentModal({
                   このファイル形式はプレビューできません
                 </p>
                 <div className="flex gap-2 justify-center">
-                  <Button onClick={handleViewInNewTab} variant="outline">
-                    <FaExternalLinkAlt className="mr-2 h-4 w-4" />
-                    新しいタブで開く
-                  </Button>
                   <Button onClick={handleDownload} disabled={loading}>
                     {loading ? (
                       <>
