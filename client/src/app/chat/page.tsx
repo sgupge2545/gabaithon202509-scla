@@ -469,19 +469,49 @@ export default function ChatPage() {
                   </Button>
                 )}
                 {gameState.gameStatus.status === "generating" && (
-                  <Badge variant="outline">問題生成中...</Badge>
+                  <div className="flex items-center space-x-2">
+                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-500 border-t-transparent"></div>
+                    <Badge variant="outline">問題生成中...</Badge>
+                  </div>
                 )}
                 {gameState.gameStatus.status === "finished" && (
-                  <Button onClick={startGame} size="sm" variant="outline">
-                    <FaPlay className="h-4 w-4 mr-2" />
-                    新しいゲーム
+                  <Button
+                    onClick={startGame}
+                    size="sm"
+                    variant="outline"
+                    disabled={startingGame}
+                  >
+                    {startingGame ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-500 border-t-transparent mr-2"></div>
+                        開始中...
+                      </>
+                    ) : (
+                      <>
+                        <FaPlay className="h-4 w-4 mr-2" />
+                        新しいゲーム
+                      </>
+                    )}
                   </Button>
                 )}
               </div>
             ) : (
-              <Button onClick={startGame} className="ml-auto">
-                <FaPlay className="h-4 w-4 mr-2" />
-                ゲーム開始
+              <Button
+                onClick={startGame}
+                className="ml-auto"
+                disabled={startingGame}
+              >
+                {startingGame ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2"></div>
+                    開始中...
+                  </>
+                ) : (
+                  <>
+                    <FaPlay className="h-4 w-4 mr-2" />
+                    ゲーム開始
+                  </>
+                )}
               </Button>
             )}
           </div>
