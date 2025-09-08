@@ -907,7 +907,7 @@ export default function ChatPage() {
         </div>
       </div>
 
-      <div className="p-4 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700">
+      <div className="p-4 bg-gradient-to-br from-[#0f0f23] to-[#533483] border-t border-slate-200 dark:border-slate-700">
         {/* Ludusに聞くボタン（ゲーム中でない場合のみ表示） */}
         {!gameState.gameStatus || gameState.gameStatus.status === "finished" ? (
           <div className="mb-3">
@@ -943,7 +943,7 @@ export default function ChatPage() {
                 sendingMessage ||
                 gameState.gameStatus?.status === "waiting_next"
               }
-              className={`min-h-[44px] max-h-32 resize-none rounded-2xl border-slate-300 dark:border-slate-600 focus:border-blue-500 dark:focus:border-blue-400 pr-12 ${
+              className={`min-h-[44px] bg-white max-h-32 resize-none rounded-2xl border-slate-300 dark:border-slate-600 focus:border-blue-500 dark:focus:border-blue-400 pr-12 ${
                 askLudus
                   ? "border-purple-300 dark:border-purple-600 focus:border-purple-500 dark:focus:border-purple-400"
                   : ""
@@ -961,7 +961,7 @@ export default function ChatPage() {
             className={`h-11 w-11 rounded-full transition-colors ${
               askLudus
                 ? "bg-purple-500 hover:bg-purple-600 dark:bg-purple-600 dark:hover:bg-purple-700"
-                : "bg-blue-500 hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-700"
+                : "bg-purple-500 hover:bg-purple-600 dark:bg-purple-600 dark:hover:bg-purple-700"
             }`}
             size="icon"
           >
@@ -1142,7 +1142,7 @@ function MessageItem({
             <div
               className={`absolute top-4 w-0 h-0 ${
                 isOwnMessageFunc
-                  ? "right-0 translate-x-1 border-l-8 border-l-blue-500 border-t-4 border-t-transparent border-b-4 border-b-transparent"
+                  ? "right-0 translate-x-1 border-l-8 border-l-purple-500 border-t-4 border-t-transparent border-b-4 border-b-transparent"
                   : "left-0 -translate-x-1 border-r-8 border-r-white dark:border-r-slate-700 border-t-4 border-t-transparent border-b-4 border-b-transparent"
               }`}
             />
