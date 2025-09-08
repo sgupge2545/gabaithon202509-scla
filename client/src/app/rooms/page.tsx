@@ -260,7 +260,7 @@ export default function RoomsPage() {
                     <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
                       <Chip
                         icon={<FaUsers />}
-                        label={`${room.members?.length || 0}/${room.capacity}`}
+                        label={`${room.member_count || 0}/${room.capacity}`}
                         size="medium"
                         sx={{
                           background: "rgba(120, 119, 198, 0.2)",
@@ -287,7 +287,7 @@ export default function RoomsPage() {
                     onClick={() =>
                       handleJoinRoom(room, room.visibility === "passcode")
                     }
-                    disabled={(room.members?.length || 0) >= room.capacity}
+                    disabled={(room.member_count || 0) >= room.capacity}
                     sx={{
                       px: 3,
                       py: 1,
@@ -310,7 +310,7 @@ export default function RoomsPage() {
                       },
                     }}
                   >
-                    {(room.members?.length || 0) >= room.capacity
+                    {(room.member_count || 0) >= room.capacity
                       ? "満室"
                       : "参加"}
                   </Button>

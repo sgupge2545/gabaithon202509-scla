@@ -18,7 +18,8 @@ export interface Room {
   title: string;
   visibility: "public" | "passcode";
   capacity: number;
-  members: RoomMember[];
+  member_count?: number;
+  members?: RoomMember[];
   created_at: string;
 }
 
