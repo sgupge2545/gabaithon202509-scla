@@ -455,7 +455,8 @@ export default function ChatPage() {
                   user?.id &&
                   user.id in gameState.gameStatus.scores && (
                     <Badge variant="default" className="bg-blue-500 text-white">
-                      🎯 {gameState.gameStatus.scores[user.id]}点
+                      🎯 {user.name || "あなた"}:{" "}
+                      {gameState.gameStatus.scores[user.id]}点
                     </Badge>
                   )}
               </div>
