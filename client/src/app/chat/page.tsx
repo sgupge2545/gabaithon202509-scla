@@ -1,30 +1,30 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import DocumentModal from "@/components/DocumentModal";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
+import { Textarea } from "@/components/ui/textarea";
+import UploadModal from "@/components/UploadModal";
+import { useAuth } from "@/contexts/AuthContext";
+import { useRoom } from "@/contexts/RoomContext";
+import { useGameApi } from "@/hooks/useGameApi";
+import { useRoomSocket } from "@/hooks/useRoomSocket";
+import type { GameEvent, GradingResult } from "@/types/game";
+import type { Message } from "@/types/message";
 import { useRouter } from "next/navigation";
+import React, { useEffect, useRef, useState } from "react";
 import {
-  FaPaperPlane,
   FaArrowLeft,
-  FaUsers,
+  FaPaperPlane,
   FaPlay,
   FaPlus,
   FaTrash,
   FaUpload,
+  FaUsers,
 } from "react-icons/fa";
-import type { Message } from "@/types/message";
-import { useAuth } from "@/contexts/AuthContext";
-import { useRoom } from "@/contexts/RoomContext";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Textarea } from "@/components/ui/textarea";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
-import { useGameApi } from "@/hooks/useGameApi";
-import { useRoomSocket } from "@/hooks/useRoomSocket";
-import type { GradingResult, GameEvent } from "@/types/game";
-import UploadModal from "@/components/UploadModal";
-import DocumentModal from "@/components/DocumentModal";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -1043,9 +1043,11 @@ function MessageItem({
         >
           {showAvatar && message.user ? (
             <Avatar className="w-8 h-8">
-              {message.user.picture && (
+              {message.user.name === "Ludus" ? (
+                <AvatarImage src="/ludus.png" />
+              ) : message.user.picture ? (
                 <AvatarImage src={message.user.picture} />
-              )}
+              ) : null}
               <AvatarFallback
                 className={`text-xs ${
                   isOwnMessageFunc
