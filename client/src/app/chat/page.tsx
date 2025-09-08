@@ -108,8 +108,8 @@ export default function ChatPage() {
       > = {};
 
       socketMessages.forEach((message) => {
-        // 自分のメッセージで採点結果がある場合
-        if (message.user?.id === user.id && message.grading_result) {
+        // 採点結果があるメッセージ（自分・他人問わず）
+        if (message.grading_result) {
           newGradingResults[message.id] = message.grading_result;
         }
       });
@@ -930,11 +930,8 @@ export default function ChatPage() {
               !prevMessage || prevMessage.user?.id !== message.user?.id;
             const showName = showAvatar && !isOwnMessage(message, user);
 
-            // 採点結果を取得（自分のメッセージの場合のみ）
-            const gradingResult =
-              message.user?.id === user?.id
-                ? gradingResults[message.id]
-                : undefined;
+            // 採点結果を取得（全てのメッセージ対象）
+            const gradingResult = gradingResults[message.id];
 
             return (
               <MessageItem
@@ -1251,6 +1248,11 @@ function MessageItem({
                 >
                   {gradingResult.is_correct ? "✅ 正解！" : "❌ 不正解"}
                   <span className="ml-2">({gradingResult.score}点)</span>
+                  {!isOwnMessageFunc && gradingResult.user_name && (
+                    <span className="ml-2 text-xs font-normal opacity-75">
+                      - {gradingResult.user_name}の回答
+                    </span>
+                  )}
                 </div>
                 {gradingResult.feedback && (
                   <div

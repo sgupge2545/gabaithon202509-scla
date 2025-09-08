@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import type { Message } from "@/types/message";
 import type { GameEvent } from "@/types/game";
+import type { Message } from "@/types/message";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 export function useRoomSocket(
   roomId?: string,
