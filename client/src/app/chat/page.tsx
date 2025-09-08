@@ -1067,7 +1067,7 @@ function MessageItem({
           }`}
         >
           {showName && !isOwnMessageFunc && message.user && (
-            <div className="text-xs text-slate-600 dark:text-slate-400 mb-1 ml-3">
+            <div className="text-xs text-white mb-1 ml-3">
               {message.user.name || "不明"}
             </div>
           )}
