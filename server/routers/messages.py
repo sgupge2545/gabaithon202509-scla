@@ -20,6 +20,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from ..database import get_db, room_service, user_service
+from ..services.ai_chat_service import ai_chat_service
 from ..services.collection_manager import manager
 from ..services.game_service import game_service
 from ..services.message_service import (
@@ -111,6 +112,54 @@ async def process_game_answer_async(
             db.close()
     except Exception as e:
         logger.error(f"Failed to process async game answer: {e}")
+
+
+async def process_ai_chat_async(room_id: str, user_message: str, user_name: str):
+    """AI チャット返信を非同期で処理"""
+    try:
+        # 新しいDBセッションを作成
+        from ..database import get_db
+
+        db_gen = get_db()
+        db = next(db_gen)
+        try:
+            # システムユーザーの存在を確認
+            ai_chat_service.ensure_system_user(db)
+
+            # AI応答を生成（RAG機能付き）
+            ai_response = await ai_chat_service.generate_ai_response(
+                user_message, user_name, db
+            )
+
+            if ai_response:
+                # AIメッセージを作成（システムユーザーとして）
+                ai_message = create_message(
+                    db=db,
+                    room_id=room_id,
+                    user_id="system",  # システムユーザーID
+                    content=ai_response,
+                )
+
+                # AI応答をブロードキャスト
+                payload = {
+                    "id": ai_message.id,
+                    "room_id": ai_message.room_id,
+                    "user_id": "system",
+                    "content": ai_message.content,
+                    "created_at": ai_message.created_at,
+                    "user": {
+                        "id": "system",
+                        "name": "Ludus",
+                        "picture": None,
+                    },
+                }
+
+                await manager.broadcast(room_id, payload)
+
+        finally:
+            db.close()
+    except Exception as e:
+        logger.error(f"Failed to process AI chat response: {e}")
 
 
 def get_current_user(request: Request, db: Session) -> dict:
@@ -343,6 +392,38 @@ async def send_message(
                 continue
     except Exception as e:
         logger.warning(f"Failed to start async game answer processing: {e}")
+
+    # AI チャット返信処理（ゲーム中でない場合のみ）
+    try:
+        # ゲーム中でない場合のみAI返信をチェック
+        is_game_active = False
+        active_games = redis_client.keys("game:*")
+        for game_key in active_games:
+            if game_key.endswith(":scores") or game_key.endswith(":answers"):
+                continue
+            try:
+                game_data = redis_client.hgetall(game_key)
+                if (
+                    game_data.get("room_id") == room_id
+                    and game_data.get("status") == "playing"
+                ):
+                    is_game_active = True
+                    break
+            except Exception:
+                continue
+
+        # ゲーム中でなく、@ludusメンションがある場合はAI返信
+        if not is_game_active and ai_chat_service.should_respond_to_message(
+            message_data.content
+        ):
+            user_message = ai_chat_service.extract_user_message(message_data.content)
+            user_name = current_user.get("name", "ユーザー")
+
+            # AI返信を非同期で処理
+            asyncio.create_task(process_ai_chat_async(room_id, user_message, user_name))
+
+    except Exception as e:
+        logger.warning(f"Failed to start AI chat processing: {e}")
 
     return MessageResponse(
         id=message.id,

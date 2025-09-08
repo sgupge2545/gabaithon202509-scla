@@ -33,6 +33,7 @@ export default function ChatPage() {
   const [newMessage, setNewMessage] = useState("");
   const [sendingMessage, setSendingMessage] = useState(false);
   const [exiting, setExiting] = useState(false);
+  const [askLudus, setAskLudus] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // 採点結果管理（メッセージIDをキーとして使用）
@@ -91,7 +92,9 @@ export default function ChatPage() {
       gameState.gameStatus?.status === "playing" && currentGameId && user?.id;
 
     try {
-      const sentMessage = await sendMessageHook(newMessage);
+      // Ludusフラグが有効な場合はメッセージに@ludusを付加
+      const messageToSend = askLudus ? `@ludus ${newMessage}` : newMessage;
+      const sentMessage = await sendMessageHook(messageToSend);
 
       // ゲーム中のメッセージの場合、採点待ちローディング状態を設定
       if (isGameMessage && sentMessage?.id) {
@@ -104,6 +107,8 @@ export default function ChatPage() {
       }
 
       setNewMessage("");
+      // Ludusに聞くモードをリセット
+      setAskLudus(false);
     } catch (error) {
       console.error("Failed to send message:", error);
     } finally {
@@ -861,12 +866,32 @@ export default function ChatPage() {
       </div>
 
       <div className="p-4 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700">
+        {/* Ludusに聞くボタン（ゲーム中でない場合のみ表示） */}
+        {!gameState.gameStatus || gameState.gameStatus.status === "finished" ? (
+          <div className="mb-3">
+            <Button
+              variant={askLudus ? "default" : "outline"}
+              size="sm"
+              onClick={() => setAskLudus(!askLudus)}
+              className={`transition-colors ${
+                askLudus
+                  ? "bg-purple-500 hover:bg-purple-600 text-white"
+                  : "border-purple-300 text-purple-600 hover:bg-purple-50 dark:border-purple-600 dark:text-purple-400 dark:hover:bg-purple-950"
+              }`}
+            >
+              🤖 {askLudus ? "Ludusに聞く（ON）" : "Ludusに聞く"}
+            </Button>
+          </div>
+        ) : null}
+
         <div className="flex items-end space-x-3">
           <div className="flex-1 relative">
             <Textarea
               placeholder={
                 gameState.gameStatus?.status === "waiting_next"
                   ? "正解者が出ました！次の問題をお待ちください..."
+                  : askLudus
+                  ? "Ludusに質問を入力..."
                   : "メッセージを入力..."
               }
               value={newMessage}
@@ -876,7 +901,11 @@ export default function ChatPage() {
                 sendingMessage ||
                 gameState.gameStatus?.status === "waiting_next"
               }
-              className="min-h-[44px] max-h-32 resize-none rounded-2xl border-slate-300 dark:border-slate-600 focus:border-blue-500 dark:focus:border-blue-400 pr-12"
+              className={`min-h-[44px] max-h-32 resize-none rounded-2xl border-slate-300 dark:border-slate-600 focus:border-blue-500 dark:focus:border-blue-400 pr-12 ${
+                askLudus
+                  ? "border-purple-300 dark:border-purple-600 focus:border-purple-500 dark:focus:border-purple-400"
+                  : ""
+              }`}
               rows={1}
             />
           </div>
@@ -887,7 +916,11 @@ export default function ChatPage() {
               sendingMessage ||
               gameState.gameStatus?.status === "waiting_next"
             }
-            className="h-11 w-11 rounded-full bg-blue-500 hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-700 transition-colors"
+            className={`h-11 w-11 rounded-full transition-colors ${
+              askLudus
+                ? "bg-purple-500 hover:bg-purple-600 dark:bg-purple-600 dark:hover:bg-purple-700"
+                : "bg-blue-500 hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-700"
+            }`}
             size="icon"
           >
             <FaPaperPlane className="h-4 w-4" />
