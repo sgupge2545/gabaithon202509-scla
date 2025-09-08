@@ -1088,9 +1088,11 @@ function MessageItem({
         >
           {showAvatar && message.user ? (
             <Avatar className="w-8 h-8">
-              {message.user.picture && (
+              {message.user.name === "Ludus" ? (
+                <AvatarImage src="/ludus.png" />
+              ) : message.user.picture ? (
                 <AvatarImage src={message.user.picture} />
-              )}
+              ) : null}
               <AvatarFallback
                 className={`text-xs ${
                   isOwnMessageFunc
