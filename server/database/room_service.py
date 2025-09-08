@@ -10,6 +10,7 @@ from typing import List, Optional
 from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 
+from ..services.message_service import create_message
 from .models import Room, RoomMember, User
 
 logger = logging.getLogger(__name__)
@@ -52,6 +53,12 @@ def create_room(
         user_id=creator_user_id,
     )
     db.add(db_member)
+
+    # 入室ログメッセージ保存
+    user = db.query(User).filter(User.id == creator_user_id).first()
+    user_name = user.name if user else ""
+    content = f"{user_name} 入室しました"
+    create_message(db, room_id, creator_user_id, content)
 
     db.commit()
     db.refresh(db_room)
@@ -180,8 +187,6 @@ def join_room(
         db.add(db_member)
         db.commit()
         # 入室ログメッセージ保存
-        from ..services.message_service import create_message
-
         user = db.query(User).filter(User.id == user_id).first()
         user_name = user.name if user else ""
         content = f"{user_name} 入室しました"

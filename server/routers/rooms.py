@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db, room_service, user_service
 from ..services.collection_manager import manager
+from ..services.message_service import redis_client
 
 
 # レスポンスモデル
@@ -171,6 +172,32 @@ async def create_room(
         except Exception:
             pass
 
+        # 入室メッセージをWebSocketで配信
+        try:
+            # 最新の入室メッセージを取得（Redis から）
+            message_ids = redis_client.lrange(f"room:{room.id}:messages", 0, 0)
+            if message_ids:
+                message_id = message_ids[0]
+                message_data = redis_client.hgetall(f"messages:{message_id}")
+
+                if message_data and message_data.get("user_id") == current_user["id"]:
+                    # 入室メッセージをWebSocketで配信
+                    payload = {
+                        "id": message_data.get("id"),
+                        "room_id": message_data.get("room_id"),
+                        "user_id": message_data.get("user_id"),
+                        "content": message_data.get("content"),
+                        "created_at": message_data.get("created_at"),
+                        "user": {
+                            "id": message_data.get("user_id"),
+                            "name": message_data.get("user_name", ""),
+                            "picture": message_data.get("user_picture") or None,
+                        },
+                    }
+                    await manager.broadcast(room.id, payload)
+        except Exception as e:
+            logger.warning(f"Failed to broadcast creator join message: {e}")
+
         return resp
     except Exception:
         logger.exception("/rooms/create でエラーが発生しました")
@@ -296,8 +323,6 @@ async def join_room(
 
     # 入室メッセージをWebSocketで配信
     try:
-        from ..services.message_service import redis_client
-
         # 最新の入室メッセージを取得（Redis から）
         message_ids = redis_client.lrange(f"room:{room_id}:messages", 0, 0)
         if message_ids:
@@ -352,8 +377,6 @@ async def leave_room(
 
     # 退室メッセージをWebSocketで配信
     try:
-        from ..services.message_service import redis_client
-
         # 最新の退室メッセージを取得（Redis から）
         message_ids = redis_client.lrange(f"room:{room_id}:messages", 0, 0)
         if message_ids:
