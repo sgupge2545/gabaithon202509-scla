@@ -427,19 +427,6 @@ export default function ChatPage() {
                 {currentRoom.visibility === "passcode" && (
                   <Badge variant="secondary">パスコード</Badge>
                 )}
-                {/* ゲーム中のポイント表示 */}
-                {gameState.gameStatus &&
-                  (gameState.gameStatus.status === "playing" ||
-                    gameState.gameStatus.status === "waiting_next" ||
-                    gameState.gameStatus.status === "finished") &&
-                  gameState.gameStatus.scores &&
-                  user?.id &&
-                  user.id in gameState.gameStatus.scores && (
-                    <Badge variant="default" className="bg-blue-500 text-white">
-                      🎯 {user.name || "あなた"}:{" "}
-                      {gameState.gameStatus.scores[user.id]}点
-                    </Badge>
-                  )}
               </div>
             </div>
             {gameState.gameStatus ? (
