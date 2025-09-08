@@ -24,6 +24,8 @@ import { useRoomSocket } from "@/hooks/useRoomSocket";
 import { useGameApi } from "@/hooks/useGameApi";
 import type { GradingResult, GameEvent } from "@/types/game";
 import UploadModal from "@/components/UploadModal";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 export default function ChatPage() {
   const router = useRouter();
@@ -996,8 +998,56 @@ function MessageItem({
                 : "bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-600 rounded-bl-md"
             }`}
           >
-            <div className="text-sm leading-relaxed whitespace-pre-wrap">
-              {message.content}
+            <div className="text-sm leading-relaxed prose prose-sm max-w-none prose-slate dark:prose-invert">
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={{
+                  p: ({ children }) => (
+                    <p className="mb-2 last:mb-0">{children}</p>
+                  ),
+                  ul: ({ children }) => (
+                    <ul className="list-disc list-inside mb-2">{children}</ul>
+                  ),
+                  ol: ({ children }) => (
+                    <ol className="list-decimal list-inside mb-2">
+                      {children}
+                    </ol>
+                  ),
+                  li: ({ children }) => <li className="mb-1">{children}</li>,
+                  code: ({ children, className }) => {
+                    const isInline = !className;
+                    return isInline ? (
+                      <code className="bg-slate-200 dark:bg-slate-600 px-1 py-0.5 rounded text-xs">
+                        {children}
+                      </code>
+                    ) : (
+                      <code className="block bg-slate-100 dark:bg-slate-800 p-2 rounded text-xs overflow-x-auto">
+                        {children}
+                      </code>
+                    );
+                  },
+                  blockquote: ({ children }) => (
+                    <blockquote className="border-l-4 border-slate-300 dark:border-slate-600 pl-4 italic mb-2">
+                      {children}
+                    </blockquote>
+                  ),
+                  strong: ({ children }) => (
+                    <strong className="font-semibold">{children}</strong>
+                  ),
+                  em: ({ children }) => <em className="italic">{children}</em>,
+                  h1: ({ children }) => (
+                    <h1 className="text-lg font-bold mb-2">{children}</h1>
+                  ),
+                  h2: ({ children }) => (
+                    <h2 className="text-base font-bold mb-2">{children}</h2>
+                  ),
+                  h3: ({ children }) => (
+                    <h3 className="text-sm font-bold mb-1">{children}</h3>
+                  ),
+                }}
+              >
+                {message.content}
+              </ReactMarkdown>
             </div>
             <div
               className={`text-xs mt-1 ${
