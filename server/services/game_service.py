@@ -347,6 +347,16 @@ class GameService:
 
             room_id = game_data["room_id"]
 
+            # スコア情報を取得
+            scores = {}
+            try:
+                score_data = redis_client.hgetall(f"game:{game_id}:scores")
+                for user_id, score_json in score_data.items():
+                    user_score = json.loads(score_json)
+                    scores[user_id] = user_score["total_score"]
+            except Exception as e:
+                logging.warning(f"Failed to get scores for game {game_id}: {e}")
+
             # ゲーム状態を配信
             await manager.broadcast(
                 room_id,
@@ -360,7 +370,7 @@ class GameService:
                         ),
                         "total_questions": int(game_data.get("total_questions", 0)),
                         "participants": game_data.get("participants", []),
-                        "scores": json.loads(game_data.get("scores", "{}")),
+                        "scores": scores,
                     },
                 },
             )
@@ -642,26 +652,36 @@ class GameService:
             )
 
             # スコアを更新
-            GameService._update_user_score(game_id, user_id, grading_result["score"])
+            GameService._update_user_score(
+                game_id, user_id, grading_result["score"], question_index
+            )
+
+            # スコア更新後にゲーム状態をブロードキャスト
+            await GameService.broadcast_game_status(game_id)
 
             # 採点結果をWebSocketで送信（チャットメッセージとしては送信しない）
             game_data = GameService.get_game_info(game_id)
             if game_data:
-                await manager.broadcast(
-                    game_data["room_id"],
-                    {
-                        "type": "game_grading_result",
-                        "user_id": user_id,
-                        "message_id": message_id
-                        or f"answer_{game_id}_{question_index}_{user_id}",
-                        "result": {
-                            "is_correct": grading_result["is_correct"],
-                            "score": grading_result["score"],
-                            "feedback": grading_result["feedback"],
-                            "user_name": user_name or user_id,
+                # メッセージIDが提供されている場合のみ採点結果を送信
+                if message_id:
+                    await manager.broadcast(
+                        game_data["room_id"],
+                        {
+                            "type": "game_grading_result",
+                            "user_id": user_id,
+                            "message_id": message_id,
+                            "result": {
+                                "is_correct": grading_result["is_correct"],
+                                "score": grading_result["score"],
+                                "feedback": grading_result["feedback"],
+                                "user_name": user_name or user_id,
+                            },
                         },
-                    },
-                )
+                    )
+                else:
+                    logging.warning(
+                        "No message_id provided for grading result, skipping WebSocket broadcast"
+                    )
 
             # 正解の場合、回答受付を停止して解説を表示し、5秒後に次の問題に進む
             if grading_result["is_correct"]:
@@ -688,18 +708,43 @@ class GameService:
             return None
 
     @staticmethod
-    def _update_user_score(game_id: str, user_id: str, points: int):
-        """ユーザーのスコアを更新"""
+    def _update_user_score(
+        game_id: str, user_id: str, points: int, question_index: int
+    ):
+        """ユーザーのスコアを更新（同じ問題では最高得点を記録）"""
         try:
             current_score_json = redis_client.hget(f"game:{game_id}:scores", user_id)
             if current_score_json:
                 current_score = json.loads(current_score_json)
+                # 古いデータ形式の場合、question_scoresフィールドを追加
+                if "question_scores" not in current_score:
+                    current_score["question_scores"] = {}
             else:
-                current_score = {"total_score": 0, "correct_answers": 0, "rank": 0}
+                current_score = {
+                    "total_score": 0,
+                    "correct_answers": 0,
+                    "rank": 0,
+                    "question_scores": {},
+                }
 
-            current_score["total_score"] += points
-            if points > 70:  # 部分正解以上
-                current_score["correct_answers"] += 1
+            # 同じ問題での最高得点を記録
+            question_key = str(question_index)
+            if question_key not in current_score["question_scores"]:
+                current_score["question_scores"][question_key] = points
+                current_score["total_score"] += points
+                if points > 70:  # 部分正解以上
+                    current_score["correct_answers"] += 1
+            else:
+                # 既存の得点より高い場合のみ更新
+                old_points = current_score["question_scores"][question_key]
+                if points > old_points:
+                    current_score["question_scores"][question_key] = points
+                    current_score["total_score"] += points - old_points
+                    # 正解数の調整
+                    if old_points <= 70 and points > 70:
+                        current_score["correct_answers"] += 1
+                    elif old_points > 70 and points <= 70:
+                        current_score["correct_answers"] -= 1
 
             redis_client.hset(
                 f"game:{game_id}:scores", user_id, json.dumps(current_score)

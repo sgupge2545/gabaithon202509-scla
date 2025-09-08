@@ -37,6 +37,41 @@ export function useRoomSocket(
         const ordered = data.reverse();
         setMessages(ordered);
         messagesRef.current = ordered;
+
+        // メッセージに含まれる採点結果をコールバックで通知
+        const handler = onGameEventRef.current;
+        if (handler) {
+          for (const message of ordered) {
+            if (message.grading_result) {
+              handler({
+                type: "game_grading_result",
+                user_id: message.user_id,
+                message_id: message.id,
+                result: message.grading_result,
+              });
+            }
+          }
+
+          // 途中入室時のゲーム状態取得
+          try {
+            const gameRes = await fetch(`/api/game/room/${roomId}/current`, {
+              method: "GET",
+              credentials: "include",
+              headers: { Accept: "application/json" },
+            });
+            if (gameRes.ok) {
+              const gameData = await gameRes.json();
+              if (gameData.game) {
+                handler({
+                  type: "game_status_update",
+                  gameStatus: gameData.game,
+                });
+              }
+            }
+          } catch {
+            // Ignore fetch errors
+          }
+        }
       }
     } catch {
       // ignore network errors here
@@ -52,11 +87,23 @@ export function useRoomSocket(
     }
 
     heartbeatIntervalRef.current = setInterval(() => {
-      if (wsRef.current?.readyState === WebSocket.OPEN) {
+      const ws = wsRef.current;
+      if (ws && ws.readyState === WebSocket.OPEN) {
         try {
-          wsRef.current.send(JSON.stringify({ type: "ping" }));
+          ws.send(JSON.stringify({ type: "ping" }));
         } catch (e) {
           console.warn("Failed to send heartbeat:", e);
+          // ハートビート送信に失敗した場合は停止
+          if (heartbeatIntervalRef.current) {
+            clearInterval(heartbeatIntervalRef.current);
+            heartbeatIntervalRef.current = null;
+          }
+        }
+      } else {
+        // WebSocketが閉じられている場合はハートビートを停止
+        if (heartbeatIntervalRef.current) {
+          clearInterval(heartbeatIntervalRef.current);
+          heartbeatIntervalRef.current = null;
         }
       }
     }, 30000); // 30秒間隔
@@ -162,7 +209,13 @@ export function useRoomSocket(
         clearTimeout(connectionTimeout);
         setConnected(true);
         reconnectAttemptsRef.current = 0; // 成功時にリセット
-        startHeartbeat();
+
+        // 接続が確立されてから少し遅延してハートビートを開始
+        setTimeout(() => {
+          if (wsRef.current === ws && ws.readyState === WebSocket.OPEN) {
+            startHeartbeat();
+          }
+        }, 1000);
       };
 
       ws.onmessage = (ev) => {
@@ -241,6 +294,16 @@ export function useRoomSocket(
           roomId,
           timestamp: new Date().toISOString(),
         });
+
+        // より詳細なエラー情報を提供
+        if (ws.readyState === WebSocket.CLOSED) {
+          console.error(
+            "WebSocket connection failed - server may be down or unreachable"
+          );
+        } else if (ws.readyState === WebSocket.CLOSING) {
+          console.error("WebSocket connection is closing");
+        }
+
         clearTimeout(connectionTimeout);
 
         // 最新のソケットでない場合は無視
@@ -273,10 +336,28 @@ export function useRoomSocket(
   useEffect(() => {
     if (!roomId) return;
 
-    // WebSocket接続を開始
-    connectWebSocket();
+    // 既存の接続をクリーンアップしてから新しい接続を開始
+    if (wsRef.current) {
+      try {
+        wsRef.current.close(1000, "Reconnecting");
+      } catch (e) {
+        console.warn("Error closing existing WebSocket:", e);
+      }
+      wsRef.current = null;
+    }
+
+    // ハートビートを停止
+    stopHeartbeat();
+
+    // 少し遅延してから接続を開始（React StrictModeの二重実行対策）
+    const connectTimer = setTimeout(() => {
+      connectWebSocket();
+    }, 100);
 
     return () => {
+      // タイマーをクリア
+      clearTimeout(connectTimer);
+
       // クリーンアップ
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);

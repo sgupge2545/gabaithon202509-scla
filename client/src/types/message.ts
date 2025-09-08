@@ -14,6 +14,12 @@ export interface MessageResponse {
     name: string;
     picture?: string;
   } | null;
+  grading_result?: {
+    is_correct: boolean;
+    score: number;
+    feedback: string;
+    user_name: string;
+  } | null;
 }
 
 // === クライアント用型 ===

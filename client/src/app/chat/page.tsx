@@ -55,7 +55,7 @@ export default function ChatPage() {
   // 採点結果を処理するコールバック
   const handleGradingResult = (data: GameEvent) => {
     if (data.message_id && data.result) {
-      // 実際のメッセージIDをキーとして採点結果を保存
+      // 採点結果を保存
       setGradingResults((prev) => ({
         ...prev,
         [data.message_id as string]: data.result as GradingResult,
@@ -65,9 +65,15 @@ export default function ChatPage() {
 
   // WebSocket + initial load handled by hook
   const { messages: socketMessages, sendMessage: sendMessageHook } =
-    useRoomSocket(currentRoom?.id || "", (data) =>
-      updateGameStateFromWebSocket(data, handleGradingResult)
-    );
+    useRoomSocket(currentRoom?.id || "", (data) => {
+      // ゲーム状態更新時にcurrentGameIdも設定
+      if (data.type === "game_status_update" && data.gameStatus?.game_id) {
+        if (currentGameId !== data.gameStatus.game_id) {
+          setCurrentGameId(data.gameStatus.game_id);
+        }
+      }
+      updateGameStateFromWebSocket(data, handleGradingResult);
+    });
 
   useEffect(() => {
     setMessages(socketMessages);
@@ -440,6 +446,18 @@ export default function ChatPage() {
                 {currentRoom.visibility === "passcode" && (
                   <Badge variant="secondary">パスコード</Badge>
                 )}
+                {/* ゲーム中のポイント表示 */}
+                {gameState.gameStatus &&
+                  (gameState.gameStatus.status === "playing" ||
+                    gameState.gameStatus.status === "waiting_next" ||
+                    gameState.gameStatus.status === "finished") &&
+                  gameState.gameStatus.scores &&
+                  user?.id &&
+                  user.id in gameState.gameStatus.scores && (
+                    <Badge variant="default" className="bg-blue-500 text-white">
+                      🎯 {gameState.gameStatus.scores[user.id]}点
+                    </Badge>
+                  )}
               </div>
             </div>
             {gameState.gameStatus ? (
@@ -893,8 +911,11 @@ export default function ChatPage() {
               !prevMessage || prevMessage.user?.id !== message.user?.id;
             const showName = showAvatar && !isOwnMessage(message, user);
 
-            // 採点結果を取得（実際のメッセージIDをキーとして使用）
-            const gradingResult = gradingResults[message.id];
+            // 採点結果を取得（自分のメッセージの場合のみ）
+            const gradingResult =
+              message.user?.id === user?.id
+                ? gradingResults[message.id]
+                : undefined;
 
             return (
               <MessageItem
@@ -992,7 +1013,9 @@ function MessageItem({
         >
           {showAvatar && message.user ? (
             <Avatar className="w-8 h-8">
-              <AvatarImage src={message.user.picture || "/placeholder.svg"} />
+              {message.user.picture && (
+                <AvatarImage src={message.user.picture} />
+              )}
               <AvatarFallback
                 className={`text-xs ${
                   isOwnMessageFunc

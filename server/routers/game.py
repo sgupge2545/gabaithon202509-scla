@@ -1,3 +1,4 @@
+import json
 import logging
 from typing import Any, Dict, List
 
@@ -8,7 +9,7 @@ from sqlalchemy.orm import Session
 from ..database.database import get_db
 from ..services.doc_service import create_doc_with_chunks, get_chunks_from_selected_docs
 from ..services.embedding import create_embeddings
-from ..services.game_service import game_service
+from ..services.game_service import game_service, redis_client
 from ..services.gcv_ocr import extract_text
 
 router = APIRouter()
@@ -246,17 +247,84 @@ async def get_game_status(game_id: str) -> Dict[str, Any]:
         if not game_info:
             raise HTTPException(status_code=404, detail="ゲームが見つかりません")
 
+        # スコア情報を取得
+        scores = {}
+        try:
+            score_data = redis_client.hgetall(f"game:{game_id}:scores")
+            for user_id, score_json in score_data.items():
+                user_score = json.loads(score_json)
+                scores[user_id] = user_score["total_score"]
+        except Exception as e:
+            logging.warning(f"Failed to get scores for game {game_id}: {e}")
+
         return {
             "game_id": game_id,
             "status": game_info.get("status", "unknown"),
             "current_question_index": int(game_info.get("current_question_index", 0)),
             "total_questions": int(game_info.get("total_questions", 0)),
-            "participant_count": game_info.get("participant_count", 0),
+            "participants": game_info.get("participants", []),
+            "scores": scores,
         }
     except HTTPException:
         raise
     except Exception as e:
         logging.exception(f"Failed to get game status for {game_id}")
+        raise HTTPException(
+            status_code=500, detail=f"ゲーム状態の取得に失敗しました: {str(e)}"
+        )
+
+
+@router.get("/room/{room_id}/current")
+async def get_current_game_for_room(room_id: str) -> Dict[str, Any]:
+    """ルームの現在のゲーム状態を取得（途中入室ユーザー用）"""
+    try:
+        # ルームで進行中または終了したゲームを検索
+        active_games = redis_client.keys("game:*")
+        current_game = None
+
+        for game_key in active_games:
+            if game_key.endswith(":scores") or game_key.endswith(":answers"):
+                continue
+
+            try:
+                game_data = redis_client.hgetall(game_key)
+                if game_data.get("room_id") == room_id and game_data.get("status") in [
+                    "playing",
+                    "waiting_next",
+                    "finished",
+                ]:
+                    game_id = game_key.split(":")[-1]
+
+                    # スコア情報を取得
+                    scores = {}
+                    try:
+                        score_data = redis_client.hgetall(f"game:{game_id}:scores")
+                        for user_id, score_json in score_data.items():
+                            user_score = json.loads(score_json)
+                            scores[user_id] = user_score["total_score"]
+                    except Exception:
+                        pass
+
+                    current_game = {
+                        "game_id": game_id,
+                        "status": game_data.get("status", "unknown"),
+                        "current_question_index": int(
+                            game_data.get("current_question_index", 0)
+                        ),
+                        "total_questions": int(game_data.get("total_questions", 0)),
+                        "participants": game_data.get("participants", []),
+                        "scores": scores,
+                    }
+                    break
+            except Exception:
+                continue
+
+        if not current_game:
+            return {"game": None}
+
+        return {"game": current_game}
+    except Exception as e:
+        logging.exception(f"Failed to get current game for room {room_id}")
         raise HTTPException(
             status_code=500, detail=f"ゲーム状態の取得に失敗しました: {str(e)}"
         )

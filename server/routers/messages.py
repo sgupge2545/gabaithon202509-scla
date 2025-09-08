@@ -32,6 +32,48 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
+def get_grading_result_for_message(message_id: str, user_id: str) -> dict | None:
+    """メッセージの採点結果を取得"""
+    try:
+        # 全てのゲームから該当メッセージの採点結果を検索
+        active_games = redis_client.keys("game:*")
+        for game_key in active_games:
+            if game_key.endswith(":scores") or game_key.endswith(":answers"):
+                continue
+
+            try:
+                game_data = redis_client.hgetall(game_key)
+                if not game_data:
+                    continue
+
+                game_id = game_key.split(":")[-1]
+
+                # 各問題の回答を確認
+                question_keys = redis_client.keys(f"game:{game_id}:answers:*")
+                for question_key in question_keys:
+                    try:
+                        answers = redis_client.hgetall(question_key)
+                        if user_id in answers:
+                            answer_data = json.loads(answers[user_id])
+                            if answer_data.get("message_id") == message_id:
+                                # 採点結果を返す
+                                return {
+                                    "is_correct": answer_data.get("is_correct", False),
+                                    "score": answer_data.get("score", 0),
+                                    "feedback": answer_data.get("feedback", ""),
+                                    "user_name": answer_data.get("user_name", ""),
+                                }
+                    except (json.JSONDecodeError, redis.ResponseError):
+                        continue
+            except redis.ResponseError:
+                continue
+
+        return None
+    except Exception as e:
+        logger.warning(f"Failed to get grading result for message {message_id}: {e}")
+        return None
+
+
 # レスポンスモデル
 class MessageResponse(BaseModel):
     id: str
@@ -40,6 +82,7 @@ class MessageResponse(BaseModel):
     content: str
     created_at: str
     user: dict | None = None
+    grading_result: dict | None = None  # 採点結果を追加
 
     class Config:
         from_attributes = True
@@ -117,13 +160,15 @@ async def get_messages(
 
     try:
         messages = get_room_messages(db, room_id, limit, offset)
-    except Exception as e:
+    except Exception:
         logger.exception("/rooms/{room_id}/messages 取得でエラーが発生しました")
         raise HTTPException(status_code=500, detail="メッセージ取得に失敗しました")
 
     result = []
     for message in messages:
         user_info = None
+        grading_result = None
+
         try:
             data = redis_client.hgetall(f"messages:{message.id}")
             if data:
@@ -138,6 +183,10 @@ async def get_messages(
         except Exception:
             pass
 
+        # 自分のメッセージの場合のみ採点結果を取得
+        if message.user_id == current_user["id"]:
+            grading_result = get_grading_result_for_message(message.id, message.user_id)
+
         result.append(
             MessageResponse(
                 id=message.id,
@@ -146,6 +195,7 @@ async def get_messages(
                 content=message.content,
                 created_at=message.created_at,
                 user=user_info,
+                grading_result=grading_result,
             )
         )
 
@@ -177,9 +227,11 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str):
                     pass
 
             except Exception as e:
-                logger.error(
-                    f"Error processing WebSocket message for room {room_id}: {e}"
-                )
+                # 正常な切断コード（1000, 1001）の場合はエラーログを出さない
+                if str(e) not in ["1000", "1001"]:
+                    logger.error(
+                        f"Error processing WebSocket message for room {room_id}: {e}"
+                    )
                 break
 
     except WebSocketDisconnect:
@@ -217,7 +269,7 @@ async def send_message(
             user_id=current_user["id"],
             content=message_data.content,
         )
-    except Exception as e:
+    except Exception:
         logger.exception("/rooms/{room_id}/messages 送信でエラーが発生しました")
         raise HTTPException(status_code=500, detail="メッセージ送信に失敗しました")
 
@@ -257,14 +309,21 @@ async def send_message(
     try:
         # ルームで進行中のゲームがあるかチェック
         active_games = redis_client.keys("game:*")
+
         for game_key in active_games:
+            # スコアやアンサーキーをスキップ
+            if game_key.endswith(":scores") or game_key.endswith(":answers"):
+                continue
+
             try:
                 game_data = redis_client.hgetall(game_key)
+
                 if (
                     game_data.get("room_id") == room_id
                     and game_data.get("status") == "playing"
                 ):
                     game_id = game_key.split(":")[-1]
+
                     # 回答処理を非同期で実行（メッセージIDを含める）
                     asyncio.create_task(
                         process_game_answer_async(
@@ -279,6 +338,9 @@ async def send_message(
             except redis.ResponseError as re:
                 logger.warning(f"Redis type error for game {game_key}: {re}")
                 continue
+            except Exception as e:
+                logger.error(f"Error processing game key {game_key}: {e}")
+                continue
     except Exception as e:
         logger.warning(f"Failed to start async game answer processing: {e}")
 
@@ -289,4 +351,5 @@ async def send_message(
         content=message.content,
         created_at=message.created_at,
         user=user_info,
+        grading_result=None,  # 送信時点では採点結果はまだない
     )
