@@ -1,30 +1,30 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import DocumentModal from "@/components/DocumentModal";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
+import { Textarea } from "@/components/ui/textarea";
+import UploadModal from "@/components/UploadModal";
+import { useAuth } from "@/contexts/AuthContext";
+import { useRoom } from "@/contexts/RoomContext";
+import { useGameApi } from "@/hooks/useGameApi";
+import { useRoomSocket } from "@/hooks/useRoomSocket";
+import type { GameEvent, GradingResult } from "@/types/game";
+import type { Message } from "@/types/message";
 import { useRouter } from "next/navigation";
+import React, { useEffect, useRef, useState } from "react";
 import {
-  FaPaperPlane,
   FaArrowLeft,
-  FaUsers,
+  FaPaperPlane,
   FaPlay,
   FaPlus,
   FaTrash,
   FaUpload,
+  FaUsers,
 } from "react-icons/fa";
-import type { Message } from "@/types/message";
-import { useAuth } from "@/contexts/AuthContext";
-import { useRoom } from "@/contexts/RoomContext";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Textarea } from "@/components/ui/textarea";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
-import { useGameApi } from "@/hooks/useGameApi";
-import { useRoomSocket } from "@/hooks/useRoomSocket";
-import type { GradingResult, GameEvent } from "@/types/game";
-import UploadModal from "@/components/UploadModal";
-import DocumentModal from "@/components/DocumentModal";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -75,13 +75,58 @@ export default function ChatPage() {
         if (currentGameId !== data.gameStatus.game_id) {
           setCurrentGameId(data.gameStatus.game_id);
         }
+
+        // 問題が終了した時（waiting_next or finished）に採点中の表示をクリア
+        if (
+          data.gameStatus.status === "waiting_next" ||
+          data.gameStatus.status === "finished"
+        ) {
+          setGradingResults((prev) => {
+            const updated = { ...prev };
+            // loading: true の項目を削除
+            Object.keys(updated).forEach((messageId) => {
+              const result = updated[messageId];
+              if (result && "loading" in result && result.loading) {
+                delete updated[messageId];
+              }
+            });
+            return updated;
+          });
+        }
       }
       updateGameStateFromWebSocket(data, handleGradingResult);
     });
 
   useEffect(() => {
     setMessages(socketMessages);
-  }, [socketMessages]);
+
+    // メッセージが更新された時に採点結果を復元
+    if (socketMessages.length > 0 && user?.id) {
+      const newGradingResults: Record<
+        string,
+        GradingResult | { loading: boolean }
+      > = {};
+
+      socketMessages.forEach((message) => {
+        // 自分のメッセージで採点結果がある場合
+        if (message.user?.id === user.id && message.grading_result) {
+          newGradingResults[message.id] = message.grading_result;
+        }
+      });
+
+      // 既存の採点結果と統合（既存のloading状態は保持）
+      setGradingResults((prev) => {
+        const updated = { ...prev };
+        Object.entries(newGradingResults).forEach(([messageId, result]) => {
+          // 既にloading状態でない場合のみ更新
+          if (!updated[messageId] || !("loading" in updated[messageId])) {
+            updated[messageId] = result;
+          }
+        });
+        return updated;
+      });
+    }
+  }, [socketMessages, user?.id]);
 
   const sendMessage = async () => {
     if (!newMessage.trim() || sendingMessage || !currentRoom?.id) return;
