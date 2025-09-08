@@ -46,7 +46,10 @@ export default function RoomsPage() {
   });
 
   const handleCreateRoom = async () => {
-    if (!newRoom.title.trim()) return;
+    if (!newRoom.title.trim()) {
+      alert("ルーム名を入力してください");
+      return;
+    }  
 
     // パスコード付きルームの場合、パスコードが入力されているかチェック
     if (newRoom.visibility === "passcode" && !newRoom.passcode?.trim()) {
