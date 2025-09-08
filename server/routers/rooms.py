@@ -172,7 +172,7 @@ async def create_room(
             pass
 
         return resp
-    except Exception as e:
+    except Exception:
         logger.exception("/rooms/create でエラーが発生しました")
         raise HTTPException(status_code=500, detail="ルーム作成に失敗しました")
 
@@ -265,7 +265,7 @@ async def join_room(
             user_id=current_user["id"],
             passcode=join_data.passcode,
         )
-    except Exception as e:
+    except Exception:
         logger.exception("/rooms/{room_id}/join でエラーが発生しました")
         raise HTTPException(status_code=500, detail="参加に失敗しました")
 
@@ -294,6 +294,34 @@ async def join_room(
     except Exception:
         pass
 
+    # 入室メッセージをWebSocketで配信
+    try:
+        from ..services.message_service import redis_client
+
+        # 最新の入室メッセージを取得（Redis から）
+        message_ids = redis_client.lrange(f"room:{room_id}:messages", 0, 0)
+        if message_ids:
+            message_id = message_ids[0]
+            message_data = redis_client.hgetall(f"messages:{message_id}")
+
+            if message_data and message_data.get("user_id") == current_user["id"]:
+                # 入室メッセージをWebSocketで配信
+                payload = {
+                    "id": message_data.get("id"),
+                    "room_id": message_data.get("room_id"),
+                    "user_id": message_data.get("user_id"),
+                    "content": message_data.get("content"),
+                    "created_at": message_data.get("created_at"),
+                    "user": {
+                        "id": message_data.get("user_id"),
+                        "name": message_data.get("user_name", ""),
+                        "picture": message_data.get("user_picture") or None,
+                    },
+                }
+                await manager.broadcast(room_id, payload)
+    except Exception as e:
+        logger.warning(f"Failed to broadcast join message: {e}")
+
     return {"message": "参加しました"}
 
 
@@ -312,7 +340,7 @@ async def leave_room(
             room_id=room_id,
             user_id=current_user["id"],
         )
-    except Exception as e:
+    except Exception:
         logger.exception("/rooms/{room_id}/leave でエラーが発生しました")
         raise HTTPException(status_code=500, detail="退出に失敗しました")
 
@@ -321,6 +349,34 @@ async def leave_room(
             "leave_room 失敗: room_id=%s user_id=%s", room_id, current_user["id"]
         )
         raise HTTPException(status_code=500, detail="退出に失敗しました")
+
+    # 退室メッセージをWebSocketで配信
+    try:
+        from ..services.message_service import redis_client
+
+        # 最新の退室メッセージを取得（Redis から）
+        message_ids = redis_client.lrange(f"room:{room_id}:messages", 0, 0)
+        if message_ids:
+            message_id = message_ids[0]
+            message_data = redis_client.hgetall(f"messages:{message_id}")
+
+            if message_data and message_data.get("user_id") == current_user["id"]:
+                # 退室メッセージをWebSocketで配信
+                payload = {
+                    "id": message_data.get("id"),
+                    "room_id": message_data.get("room_id"),
+                    "user_id": message_data.get("user_id"),
+                    "content": message_data.get("content"),
+                    "created_at": message_data.get("created_at"),
+                    "user": {
+                        "id": message_data.get("user_id"),
+                        "name": message_data.get("user_name", ""),
+                        "picture": message_data.get("user_picture") or None,
+                    },
+                }
+                await manager.broadcast(room_id, payload)
+    except Exception as e:
+        logger.warning(f"Failed to broadcast leave message: {e}")
 
     # check if room still exists; if not, broadcast deletion
     try:
@@ -359,7 +415,7 @@ async def delete_room(
             room_id=room_id,
             user_id=current_user["id"],
         )
-    except Exception as e:
+    except Exception:
         logger.exception("/rooms/{room_id} 削除でエラーが発生しました")
         raise HTTPException(status_code=500, detail="ルーム削除に失敗しました")
 
