@@ -24,6 +24,7 @@ import { useRoomSocket } from "@/hooks/useRoomSocket";
 import { useGameApi } from "@/hooks/useGameApi";
 import type { GradingResult, GameEvent } from "@/types/game";
 import UploadModal from "@/components/UploadModal";
+import DocumentModal from "@/components/DocumentModal";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -150,6 +151,11 @@ export default function ChatPage() {
     "existing"
   );
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
+  const [documentModalOpen, setDocumentModalOpen] = useState(false);
+  const [selectedDocument, setSelectedDocument] = useState<{
+    docId: string;
+    filename: string;
+  } | null>(null);
   const [userDocuments, setUserDocuments] = useState<
     {
       id: string;
@@ -241,6 +247,39 @@ export default function ChatPage() {
 
   const clearDocumentSelection = () => {
     setSelectedDocIds([]);
+  };
+
+  const extractReferencedDocuments = (message: Message) => {
+    // メッセージに参考資料の情報が含まれている場合はそれを使用
+    if (message.referenced_docs && message.referenced_docs.length > 0) {
+      return message.referenced_docs.map((doc) => ({
+        docId: doc.doc_id,
+        filename: doc.filename,
+      }));
+    }
+
+    // 後方互換性のため、コンテンツからも抽出を試行
+    const referenceMatch = message.content.match(/参考：(.+)$/m);
+    if (!referenceMatch) return [];
+
+    // ファイル名を抽出（カンマ区切り）
+    const filenames = referenceMatch[1].split(",").map((name) => name.trim());
+
+    // ファイル名からdoc_idを検索（userDocumentsが利用可能な場合のみ）
+    const referencedDocs = [];
+    for (const filename of filenames) {
+      const doc = userDocuments.find((d) => d.filename === filename);
+      if (doc) {
+        referencedDocs.push({ docId: doc.id, filename: doc.filename });
+      }
+    }
+
+    return referencedDocs;
+  };
+
+  const handleViewDocument = (docId: string, filename: string) => {
+    setSelectedDocument({ docId, filename });
+    setDocumentModalOpen(true);
   };
 
   const mergeFiles = (existing: File[], incoming: File[]) => {
@@ -858,6 +897,8 @@ export default function ChatPage() {
                 showAvatar={showAvatar}
                 showName={showName}
                 gradingResult={gradingResult}
+                onViewDocument={handleViewDocument}
+                extractReferencedDocuments={extractReferencedDocuments}
               />
             );
           })}
@@ -934,6 +975,19 @@ export default function ChatPage() {
         onClose={() => setUploadModalOpen(false)}
         onUploadComplete={handleUploadComplete}
       />
+
+      {/* 資料表示モーダル */}
+      {selectedDocument && (
+        <DocumentModal
+          isOpen={documentModalOpen}
+          onClose={() => {
+            setDocumentModalOpen(false);
+            setSelectedDocument(null);
+          }}
+          docId={selectedDocument.docId}
+          filename={selectedDocument.filename}
+        />
+      )}
     </div>
   );
 }
@@ -947,11 +1001,17 @@ function MessageItem({
   showAvatar = true,
   showName = true,
   gradingResult,
+  onViewDocument,
+  extractReferencedDocuments,
 }: {
   message: Message;
   showAvatar?: boolean;
   showName?: boolean;
   gradingResult?: GradingResult | { loading: boolean };
+  onViewDocument?: (docId: string, filename: string) => void;
+  extractReferencedDocuments?: (
+    message: Message
+  ) => { docId: string; filename: string }[];
 }) {
   const formatTime = (dateString: string) => {
     const date = new Date(dateString);
@@ -1086,6 +1146,28 @@ function MessageItem({
               }`}
             />
           </div>
+
+          {/* 参考資料ボタン */}
+          {extractReferencedDocuments &&
+            onViewDocument &&
+            (() => {
+              const referencedDocs = extractReferencedDocuments(message);
+              return referencedDocs.length > 0 ? (
+                <div className="mt-2 flex flex-wrap gap-1">
+                  {referencedDocs.map((doc, index) => (
+                    <Button
+                      key={index}
+                      variant="outline"
+                      size="sm"
+                      onClick={() => onViewDocument(doc.docId, doc.filename)}
+                      className="text-xs h-6 px-2 bg-blue-50 hover:bg-blue-100 border-blue-200 text-blue-700 dark:bg-blue-950 dark:hover:bg-blue-900 dark:border-blue-800 dark:text-blue-300"
+                    >
+                      📄 {doc.filename}
+                    </Button>
+                  ))}
+                </div>
+              ) : null;
+            })()}
         </div>
       </div>
 

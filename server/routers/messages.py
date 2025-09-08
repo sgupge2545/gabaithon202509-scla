@@ -81,6 +81,7 @@ class MessageResponse(BaseModel):
     room_id: str
     user_id: str | None
     content: str
+    referenced_docs: List[dict] | None = None  # 参考資料の情報
     created_at: str
     user: dict | None = None
     grading_result: dict | None = None  # 採点結果を追加
@@ -127,7 +128,7 @@ async def process_ai_chat_async(room_id: str, user_message: str, user_name: str)
             ai_chat_service.ensure_system_user(db)
 
             # AI応答を生成（RAG機能付き）
-            ai_response = await ai_chat_service.generate_ai_response(
+            ai_response, referenced_docs = await ai_chat_service.generate_ai_response(
                 user_message, user_name, db
             )
 
@@ -138,6 +139,7 @@ async def process_ai_chat_async(room_id: str, user_message: str, user_name: str)
                     room_id=room_id,
                     user_id="system",  # システムユーザーID
                     content=ai_response,
+                    referenced_docs=referenced_docs,
                 )
 
                 # AI応答をブロードキャスト
@@ -146,6 +148,7 @@ async def process_ai_chat_async(room_id: str, user_message: str, user_name: str)
                     "room_id": ai_message.room_id,
                     "user_id": "system",
                     "content": ai_message.content,
+                    "referenced_docs": referenced_docs,
                     "created_at": ai_message.created_at,
                     "user": {
                         "id": "system",
@@ -242,6 +245,7 @@ async def get_messages(
                 room_id=message.room_id,
                 user_id=message.user_id,
                 content=message.content,
+                referenced_docs=message.referenced_docs,
                 created_at=message.created_at,
                 user=user_info,
                 grading_result=grading_result,

@@ -3,17 +3,71 @@
 """
 
 import logging
+import os
 from typing import Dict, List
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from ..database.database import get_db
+from ..database.models import Doc
 from ..services.doc_service import create_doc_with_chunks, get_user_documents
 from ..services.embedding import create_embeddings
 from ..services.gcv_ocr import extract_text
 
 router = APIRouter()
+
+# アップロードファイル保存用のディレクトリ
+UPLOAD_DIR = "uploads"
+
+
+def ensure_upload_dir():
+    """アップロードディレクトリが存在することを確認"""
+    if not os.path.exists(UPLOAD_DIR):
+        os.makedirs(UPLOAD_DIR)
+        logging.info(f"Created upload directory: {UPLOAD_DIR}")
+
+
+def get_file_extension(mime_type: str, filename: str = None) -> str:
+    """MIMEタイプまたはファイル名から拡張子を取得"""
+    # ファイル名から拡張子を取得
+    if filename and "." in filename:
+        return os.path.splitext(filename)[1].lower()
+
+    # MIMEタイプから拡張子を推定
+    mime_to_ext = {
+        "application/pdf": ".pdf",
+        "image/jpeg": ".jpg",
+        "image/jpg": ".jpg",
+        "image/png": ".png",
+        "image/gif": ".gif",
+        "image/webp": ".webp",
+        "text/plain": ".txt",
+        "application/msword": ".doc",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
+    }
+    return mime_to_ext.get(mime_type, ".bin")
+
+
+def save_uploaded_file(
+    file_content: bytes, doc_id: str, mime_type: str, filename: str = None
+) -> str:
+    """アップロードされたファイルを保存"""
+    ensure_upload_dir()
+
+    # 拡張子を取得
+    extension = get_file_extension(mime_type, filename)
+
+    # ファイルパスを生成
+    file_path = os.path.join(UPLOAD_DIR, f"{doc_id}{extension}")
+
+    # ファイルを保存
+    with open(file_path, "wb") as f:
+        f.write(file_content)
+
+    logging.info(f"Saved file: {file_path}")
+    return file_path
 
 
 def get_current_user(request: Request) -> Dict:
@@ -130,6 +184,20 @@ async def upload_documents(
                         chunks_data=chunks_data,
                     )
 
+                    # ファイルを物理的に保存
+                    try:
+                        file_path = save_uploaded_file(
+                            content, doc.id, mime_type, file.filename
+                        )
+
+                        # DBのstorage_uriを更新
+                        doc.storage_uri = file_path
+                        db.commit()
+
+                    except Exception as e:
+                        logging.error(f"Failed to save file {file.filename}: {e}")
+                        # ファイル保存に失敗してもDBの処理は続行
+
                     results.append(
                         {
                             "filename": file.filename,
@@ -183,3 +251,33 @@ async def upload_documents(
             "failed": len(failed),
         },
     }
+
+
+@router.get("/file/{doc_id}")
+async def get_document_file(
+    doc_id: str,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """ドキュメントファイルを取得"""
+    current_user = get_current_user(request)
+
+    # ドキュメントを取得
+    doc = db.query(Doc).filter(Doc.id == doc_id).first()
+    if not doc:
+        raise HTTPException(status_code=404, detail="ドキュメントが見つかりません")
+
+    # アップロード者本人のみアクセス可能
+    if doc.uploaded_by != current_user["id"]:
+        raise HTTPException(
+            status_code=403, detail="このファイルにアクセスする権限がありません"
+        )
+
+    # ファイルが存在するかチェック
+    if not doc.storage_uri or not os.path.exists(doc.storage_uri):
+        raise HTTPException(status_code=404, detail="ファイルが見つかりません")
+
+    # ファイルを返す
+    return FileResponse(
+        path=doc.storage_uri, filename=doc.filename, media_type=doc.mime_type
+    )

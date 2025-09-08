@@ -11,6 +11,7 @@ from ..services.doc_service import create_doc_with_chunks, get_chunks_from_selec
 from ..services.embedding import create_embeddings
 from ..services.game_service import game_service, redis_client
 from ..services.gcv_ocr import extract_text
+from .docs import save_uploaded_file
 
 router = APIRouter()
 
@@ -119,6 +120,20 @@ async def start_game(
                         chunks_data=chunks_data,
                     )
                     doc_id = doc.id
+
+                    # ファイルを物理的に保存
+                    try:
+                        file_path = save_uploaded_file(
+                            content, doc.id, mime_type, f.filename
+                        )
+
+                        # DBのstorage_uriを更新
+                        doc.storage_uri = file_path
+                        db.commit()
+
+                    except Exception as e:
+                        logging.error(f"Failed to save file {f.filename}: {e}")
+                        # ファイル保存に失敗してもDBの処理は続行
 
                     logging.info(
                         "[DB] Saved doc_id=%s with %d chunks", doc_id, len(chunks_data)

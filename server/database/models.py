@@ -1,6 +1,7 @@
 from datetime import datetime
 
 from sqlalchemy import (
+    JSON,
     CheckConstraint,
     Column,
     ForeignKey,
@@ -85,6 +86,9 @@ class Message(Base):
     room_id = Column(String, ForeignKey("rooms.id", ondelete="CASCADE"), nullable=False)
     user_id = Column(String, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     content = Column(Text, nullable=False)
+    referenced_docs = Column(
+        JSON, nullable=True
+    )  # 参考資料の情報 [{"doc_id": "...", "filename": "..."}]
     created_at = Column(
         Text, nullable=False, default=lambda: datetime.now().isoformat()
     )

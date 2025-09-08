@@ -9,7 +9,7 @@ from typing import List, Optional, Tuple
 
 from sqlalchemy.orm import Session
 
-from ..database.models import DocChunk, User
+from ..database.models import Doc, DocChunk, User
 from ..services.doc_service import deserialize_vector
 from ..services.embedding import create_single_embedding
 from ..services.llm_service import llm
@@ -112,11 +112,13 @@ class AIChatService:
     @staticmethod
     async def generate_ai_response(
         user_message: str, user_name: str = "ユーザー", db: Optional[Session] = None
-    ) -> Optional[str]:
+    ) -> Tuple[Optional[str], List[dict]]:
         """AIの返信を生成（RAG機能付き）"""
+        referenced_docs_info = []  # 参考資料の情報を格納
+
         try:
             if not llm:
-                return "申し訳ありません、現在AIサービスが利用できません 😅"
+                return "申し訳ありません、現在AIサービスが利用できません 😅", []
 
             # RAG: 関連する資料を検索
             relevant_context = ""
@@ -128,11 +130,27 @@ class AIChatService:
 
                     if relevant_chunks:
                         context_parts = []
+                        referenced_docs = set()  # 参考にした資料のファイル名を記録
+
                         for chunk, similarity in relevant_chunks:
                             if similarity > 0.3:  # 類似度の閾値
-                                context_parts.append(
-                                    f"[関連資料] {chunk.content[:300]}..."
+                                # チャンクから関連するドキュメントを取得
+                                doc = (
+                                    db.query(Doc).filter(Doc.id == chunk.doc_id).first()
                                 )
+                                if doc:
+                                    referenced_docs.add(doc.filename)
+                                    # 参考資料の情報を保存
+                                    doc_info = {
+                                        "doc_id": doc.id,
+                                        "filename": doc.filename,
+                                    }
+                                    if doc_info not in referenced_docs_info:
+                                        referenced_docs_info.append(doc_info)
+
+                                    context_parts.append(
+                                        f"[資料: {doc.filename}] {chunk.content[:300]}..."
+                                    )
 
                         if context_parts:
                             relevant_context = "\n\n".join(context_parts)
@@ -147,6 +165,7 @@ class AIChatService:
 
             # プロンプトを構築
             if relevant_context:
+                referenced_files = list(referenced_docs)
                 prompt = f"""あなたはLudusという名前のAIアシスタントです。
 チャットルームで参加者と自然な会話を行います。
 
@@ -161,6 +180,7 @@ class AIChatService:
 - 必要に応じて絵文字を使って親しみやすさを演出してください
 - 長すぎる回答は避け、簡潔にまとめてください
 - 日本語で回答してください
+- 回答の最後に「参考：{', '.join(referenced_files)}」と参考にした資料名を必ず記載してください
 
 {user_name}さんからの質問: {user_message}
 
@@ -188,11 +208,14 @@ class AIChatService:
                 response.content if hasattr(response, "content") else str(response)
             )
 
-            return response_text.strip() if response_text else None
+            return (
+                response_text.strip() if response_text else None,
+                referenced_docs_info,
+            )
 
         except Exception as e:
             logger.error(f"Failed to generate AI response: {e}")
-            return "申し訳ありません、現在返信できません 😅"
+            return "申し訳ありません、現在返信できません 😅", []
 
 
 # グローバルインスタンス
