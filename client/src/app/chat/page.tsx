@@ -521,7 +521,11 @@ export default function ChatPage() {
             {gameState.gameStatus ? (
               <div className="ml-auto flex items-center space-x-4">
                 {gameState.gameStatus.status === "ready" && (
-                  <Button onClick={startChatGame} size="sm">
+                  <Button
+                    onClick={startChatGame}
+                    size="sm"
+                    className="ml-auto bg-gradient-to-br from-[#9a15f8] to-[#f86510]"
+                  >
                     <FaPlay className="h-4 w-4 mr-2" />
                     ゲーム開始
                   </Button>
@@ -536,8 +540,8 @@ export default function ChatPage() {
                   <Button
                     onClick={startGame}
                     size="sm"
-                    variant="outline"
                     disabled={startingGame}
+                    className="ml-auto bg-gradient-to-br from-[#9a15f8] to-[#f86510]"
                   >
                     {startingGame ? (
                       <>
@@ -547,7 +551,7 @@ export default function ChatPage() {
                     ) : (
                       <>
                         <FaPlay className="h-4 w-4 mr-2" />
-                        新しいゲーム
+                        ゲーム開始
                       </>
                     )}
                   </Button>
