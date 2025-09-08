@@ -1,9 +1,9 @@
+import AuthGuard from "@/components/AuthGuard";
+import { AuthProvider } from "@/contexts/AuthContext";
+import { RoomProvider } from "@/contexts/RoomContext";
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import { AuthProvider } from "@/contexts/AuthContext";
-import { RoomProvider } from "@/contexts/RoomContext";
-import AuthGuard from "@/components/AuthGuard";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "チャットアプリ",
+  title: "Ludus",
   description: "リアルタイムチャットアプリケーション",
 };
 
