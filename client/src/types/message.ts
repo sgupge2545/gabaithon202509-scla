@@ -8,6 +8,7 @@ export interface MessageResponse {
   room_id: string;
   user_id?: string;
   content: string;
+  referenced_docs?: { doc_id: string; filename: string }[] | null;
   created_at: string;
   user?: {
     id: string;

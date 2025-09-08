@@ -1,29 +1,32 @@
 "use client";
 
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
-import { Textarea } from "@/components/ui/textarea";
-import { useAuth } from "@/contexts/AuthContext";
-import { useRoom } from "@/contexts/RoomContext";
-import { useGameApi } from "@/hooks/useGameApi";
-import { useRoomSocket } from "@/hooks/useRoomSocket";
-import type { GameEvent, GradingResult } from "@/types/game";
-import type { Message } from "@/types/message";
-import { useRouter } from "next/navigation";
 import React, { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
-  FaArrowLeft,
   FaPaperPlane,
+  FaArrowLeft,
+  FaUsers,
   FaPlay,
   FaPlus,
-  FaTimes,
   FaTrash,
   FaUpload,
-  FaUsers,
 } from "react-icons/fa";
+import type { Message } from "@/types/message";
+import { useAuth } from "@/contexts/AuthContext";
+import { useRoom } from "@/contexts/RoomContext";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Textarea } from "@/components/ui/textarea";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
+import { useGameApi } from "@/hooks/useGameApi";
+import { useRoomSocket } from "@/hooks/useRoomSocket";
+import type { GradingResult, GameEvent } from "@/types/game";
+import UploadModal from "@/components/UploadModal";
+import DocumentModal from "@/components/DocumentModal";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 export default function ChatPage() {
   const router = useRouter();
@@ -31,6 +34,7 @@ export default function ChatPage() {
   const [newMessage, setNewMessage] = useState("");
   const [sendingMessage, setSendingMessage] = useState(false);
   const [exiting, setExiting] = useState(false);
+  const [askLudus, setAskLudus] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // 採点結果管理（メッセージIDをキーとして使用）
@@ -89,7 +93,9 @@ export default function ChatPage() {
       gameState.gameStatus?.status === "playing" && currentGameId && user?.id;
 
     try {
-      const sentMessage = await sendMessageHook(newMessage);
+      // Ludusフラグが有効な場合はメッセージに@ludusを付加
+      const messageToSend = askLudus ? `@ludus ${newMessage}` : newMessage;
+      const sentMessage = await sendMessageHook(messageToSend);
 
       // ゲーム中のメッセージの場合、採点待ちローディング状態を設定
       if (isGameMessage && sentMessage?.id) {
@@ -102,6 +108,8 @@ export default function ChatPage() {
       }
 
       setNewMessage("");
+      // Ludusに聞くモードをリセット
+      setAskLudus(false);
     } catch (error) {
       console.error("Failed to send message:", error);
     } finally {
@@ -139,9 +147,15 @@ export default function ChatPage() {
   const [startingGame, setStartingGame] = useState(false);
 
   // 資料選択方式の状態管理
-  const [documentSource, setDocumentSource] = useState<
-    "new" | "existing" | "none"
-  >("existing");
+  const [documentSource, setDocumentSource] = useState<"existing" | "none">(
+    "existing"
+  );
+  const [uploadModalOpen, setUploadModalOpen] = useState(false);
+  const [documentModalOpen, setDocumentModalOpen] = useState(false);
+  const [selectedDocument, setSelectedDocument] = useState<{
+    docId: string;
+    filename: string;
+  } | null>(null);
   const [userDocuments, setUserDocuments] = useState<
     {
       id: string;
@@ -169,9 +183,7 @@ export default function ChatPage() {
 
     setGameDialogOpen(true);
     // ダイアログを開いたときに既存資料を取得
-    if (documentSource === "existing") {
-      fetchUserDocuments();
-    }
+    fetchUserDocuments();
   };
 
   const fetchUserDocuments = async () => {
@@ -219,8 +231,55 @@ export default function ChatPage() {
     setSelectedDocIds(userDocuments.map((doc) => doc.id));
   };
 
+  const handleUploadComplete = (
+    results: { doc_id?: string; success: boolean }[]
+  ) => {
+    // アップロード完了後、資料一覧を再取得
+    fetchUserDocuments();
+    setUploadModalOpen(false);
+
+    // 成功したアップロードを自動選択
+    const successfulDocIds = results
+      .map((r) => r.doc_id)
+      .filter(Boolean) as string[];
+    setSelectedDocIds((prev) => [...new Set([...prev, ...successfulDocIds])]);
+  };
+
   const clearDocumentSelection = () => {
     setSelectedDocIds([]);
+  };
+
+  const extractReferencedDocuments = (message: Message) => {
+    // メッセージに参考資料の情報が含まれている場合はそれを使用
+    if (message.referenced_docs && message.referenced_docs.length > 0) {
+      return message.referenced_docs.map((doc) => ({
+        docId: doc.doc_id,
+        filename: doc.filename,
+      }));
+    }
+
+    // 後方互換性のため、コンテンツからも抽出を試行
+    const referenceMatch = message.content.match(/参考：(.+)$/m);
+    if (!referenceMatch) return [];
+
+    // ファイル名を抽出（カンマ区切り）
+    const filenames = referenceMatch[1].split(",").map((name) => name.trim());
+
+    // ファイル名からdoc_idを検索（userDocumentsが利用可能な場合のみ）
+    const referencedDocs = [];
+    for (const filename of filenames) {
+      const doc = userDocuments.find((d) => d.filename === filename);
+      if (doc) {
+        referencedDocs.push({ docId: doc.id, filename: doc.filename });
+      }
+    }
+
+    return referencedDocs;
+  };
+
+  const handleViewDocument = (docId: string, filename: string) => {
+    setSelectedDocument({ docId, filename });
+    setDocumentModalOpen(true);
   };
 
   const mergeFiles = (existing: File[], incoming: File[]) => {
@@ -347,40 +406,6 @@ export default function ChatPage() {
         if (result.data?.game_id) {
           setCurrentGameId(result.data.game_id);
         }
-      } else {
-        // 新規ファイルアップロードの場合（既存の処理）
-        const form = new FormData();
-        for (const file of selectedFiles) {
-          form.append("files", file, file.name);
-        }
-        // 設定情報も送信
-        form.append(
-          "config",
-          JSON.stringify({
-            document_source: "new",
-            problems: problems,
-          })
-        );
-
-        const res = await fetch(`${base}/api/game/start`, {
-          method: "POST",
-          body: form,
-          headers: { Accept: "application/json" },
-          credentials: "include",
-        });
-
-        if (!res.ok) {
-          const text = await res.text();
-          throw new Error(`Game start failed: ${res.status} ${text}`);
-        }
-
-        const data = await res.json();
-        console.log("ゲーム開始API 応答:", data);
-
-        // ゲーム開始後、ゲーム進行画面に切り替え
-        if (data.game_id) {
-          setCurrentGameId(data.game_id);
-        }
       }
 
       setGameDialogOpen(false);
@@ -446,18 +471,6 @@ export default function ChatPage() {
                 {currentRoom.visibility === "passcode" && (
                   <Badge variant="secondary">パスコード</Badge>
                 )}
-                {/* ゲーム中のポイント表示 */}
-                {gameState.gameStatus &&
-                  (gameState.gameStatus.status === "playing" ||
-                    gameState.gameStatus.status === "waiting_next" ||
-                    gameState.gameStatus.status === "finished") &&
-                  gameState.gameStatus.scores &&
-                  user?.id &&
-                  user.id in gameState.gameStatus.scores && (
-                    <Badge variant="default" className="bg-blue-500 text-white">
-                      🎯 {gameState.gameStatus.scores[user.id]}点
-                    </Badge>
-                  )}
               </div>
             </div>
             {gameState.gameStatus ? (
@@ -469,19 +482,49 @@ export default function ChatPage() {
                   </Button>
                 )}
                 {gameState.gameStatus.status === "generating" && (
-                  <Badge variant="outline">問題生成中...</Badge>
+                  <div className="flex items-center space-x-2">
+                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-500 border-t-transparent"></div>
+                    <Badge variant="outline">問題生成中...</Badge>
+                  </div>
                 )}
                 {gameState.gameStatus.status === "finished" && (
-                  <Button onClick={startGame} size="sm" variant="outline">
-                    <FaPlay className="h-4 w-4 mr-2" />
-                    新しいゲーム
+                  <Button
+                    onClick={startGame}
+                    size="sm"
+                    variant="outline"
+                    disabled={startingGame}
+                  >
+                    {startingGame ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-500 border-t-transparent mr-2"></div>
+                        開始中...
+                      </>
+                    ) : (
+                      <>
+                        <FaPlay className="h-4 w-4 mr-2" />
+                        新しいゲーム
+                      </>
+                    )}
                   </Button>
                 )}
               </div>
             ) : (
-              <Button onClick={startGame} className="ml-auto bg-gradient-to-br from-[#9306f1] to-[#f4650d]">
-                <FaPlay className="h-4 w-4 mr-2" />
-                ゲーム開始
+              <Button
+                onClick={startGame}
+                className="ml-auto"
+                disabled={startingGame}
+              >
+                {startingGame ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2"></div>
+                    開始中...
+                  </>
+                ) : (
+                  <>
+                    <FaPlay className="h-4 w-4 mr-2" />
+                    ゲーム開始
+                  </>
+                )}
               </Button>
             )}
           </div>
@@ -595,19 +638,7 @@ export default function ChatPage() {
                       }
                       className="mr-2"
                     />
-                    <span className="text-sm">過去の資料から選択</span>
-                  </label>
-                  <label className="flex items-center cursor-pointer">
-                    <input
-                      type="radio"
-                      value="new"
-                      checked={documentSource === "new"}
-                      onChange={(e) =>
-                        setDocumentSource(e.target.value as "new")
-                      }
-                      className="mr-2"
-                    />
-                    <span className="text-sm">新しい資料をアップロード</span>
+                    <span className="text-sm">資料から選択</span>
                   </label>
                   <label className="flex items-center cursor-pointer">
                     <input
@@ -639,10 +670,19 @@ export default function ChatPage() {
                       <>
                         <div className="flex justify-between items-center">
                           <span className="text-xs text-slate-600">
-                            📁 過去にアップロードした資料 (
-                            {userDocuments.length}件)
+                            📁 資料一覧 ({userDocuments.length}件)
                           </span>
                           <div className="flex gap-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setUploadModalOpen(true)}
+                              className="text-xs"
+                            >
+                              <FaUpload className="mr-1" />
+                              新規アップロード
+                            </Button>
                             <Button
                               type="button"
                               variant="outline"
@@ -714,11 +754,18 @@ export default function ChatPage() {
                     ) : (
                       <div className="text-center py-8 text-slate-500">
                         <p className="text-sm">
-                          過去にアップロードした資料がありません
+                          アップロードした資料がありません
                         </p>
-                        <p className="text-xs mt-1">
-                          新しい資料をアップロードしてください
-                        </p>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setUploadModalOpen(true)}
+                          className="mt-2"
+                        >
+                          <FaUpload className="mr-1" />
+                          最初の資料をアップロード
+                        </Button>
                       </div>
                     )}
                   </div>
@@ -743,79 +790,6 @@ export default function ChatPage() {
                       </div>
                     </div>
                   </div>
-                )}
-
-                {/* 新規ファイルアップロード */}
-                {documentSource === "new" && (
-                  <>
-                    <div
-                      className={`rounded-lg border-2 border-dashed p-6 text-center transition-colors ${
-                        dragActive
-                          ? "border-blue-500 bg-blue-50 dark:bg-blue-950/30"
-                          : "border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800/50"
-                      }`}
-                      onDragEnter={onDragEnter}
-                      onDragOver={onDragOver}
-                      onDragLeave={onDragLeave}
-                      onDrop={onDrop}
-                    >
-                      <div className="flex flex-col items-center gap-2">
-                        <FaUpload className="h-6 w-6 text-slate-500" />
-                        <p className="text-sm text-slate-600 dark:text-slate-400">
-                          クリックまたはドラッグ＆ドロップでファイルを追加
-                        </p>
-                        <div className="flex items-center gap-2">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={triggerFileSelect}
-                          >
-                            ファイルを選択
-                          </Button>
-                          <span className="text-xs text-slate-500">
-                            PDF / 画像 など
-                          </span>
-                        </div>
-                      </div>
-                      <input
-                        ref={fileInputRef}
-                        id="doc-files"
-                        type="file"
-                        multiple
-                        className="hidden"
-                        onChange={handleFileChange}
-                      />
-                    </div>
-
-                    {selectedFiles.length > 0 && (
-                      <div className="flex flex-wrap gap-2 pt-2">
-                        {selectedFiles.map((file, idx) => (
-                          <span
-                            key={`${file.name}-${file.size}-${file.lastModified}`}
-                            className="inline-flex items-center gap-1 text-xs pl-2 pr-1 py-1 rounded-full bg-slate-200 dark:bg-slate-700"
-                          >
-                            <span
-                              className="truncate max-w-[160px]"
-                              title={file.name}
-                            >
-                              {file.name}
-                            </span>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              className="h-5 w-5"
-                              onClick={() => removeSelectedFile(idx)}
-                              aria-label="ファイルを削除"
-                            >
-                              <FaTimes className="h-3 w-3" />
-                            </Button>
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </>
                 )}
               </div>
 
@@ -885,14 +859,14 @@ export default function ChatPage() {
               </div>
 
               <div className="flex justify-end">
-                <Button className="bg-purple-500"
+                <Button
+                  className="bg-purple-500"
                   type="button"
                   onClick={confirmStartGame}
                   disabled={
                     startingGame ||
                     (documentSource === "existing" &&
-                      selectedDocIds.length === 0) ||
-                    (documentSource === "new" && selectedFiles.length === 0)
+                      selectedDocIds.length === 0)
                   }
                 >
                   {startingGame ? "開始中..." : "開始"}
@@ -924,6 +898,8 @@ export default function ChatPage() {
                 showAvatar={showAvatar}
                 showName={showName}
                 gradingResult={gradingResult}
+                onViewDocument={handleViewDocument}
+                extractReferencedDocuments={extractReferencedDocuments}
               />
             );
           })}
@@ -931,13 +907,33 @@ export default function ChatPage() {
         </div>
       </div>
 
-      <div className="p-4 bg-gradient-to-br from-[#0f0f23] to-[#533483]">
+      <div className="p-4 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700">
+        {/* Ludusに聞くボタン（ゲーム中でない場合のみ表示） */}
+        {!gameState.gameStatus || gameState.gameStatus.status === "finished" ? (
+          <div className="mb-3">
+            <Button
+              variant={askLudus ? "default" : "outline"}
+              size="sm"
+              onClick={() => setAskLudus(!askLudus)}
+              className={`transition-colors ${
+                askLudus
+                  ? "bg-purple-500 hover:bg-purple-600 text-white"
+                  : "border-purple-300 text-purple-600 hover:bg-purple-50 dark:border-purple-600 dark:text-purple-400 dark:hover:bg-purple-950"
+              }`}
+            >
+              🤖 {askLudus ? "Ludusに聞く（ON）" : "Ludusに聞く"}
+            </Button>
+          </div>
+        ) : null}
+
         <div className="flex items-end space-x-3">
           <div className="flex-1 relative">
             <Textarea
               placeholder={
                 gameState.gameStatus?.status === "waiting_next"
                   ? "正解者が出ました！次の問題をお待ちください..."
+                  : askLudus
+                  ? "Ludusに質問を入力..."
                   : "メッセージを入力..."
               }
               value={newMessage}
@@ -947,7 +943,11 @@ export default function ChatPage() {
                 sendingMessage ||
                 gameState.gameStatus?.status === "waiting_next"
               }
-              className="bg-white min-h-[44px] max-h-32 resize-none rounded-2xl border-slate-300 dark:border-slate-600 focus:border-blue-500 dark:focus:border-blue-400 pr-12"
+              className={`min-h-[44px] max-h-32 resize-none rounded-2xl border-slate-300 dark:border-slate-600 focus:border-blue-500 dark:focus:border-blue-400 pr-12 ${
+                askLudus
+                  ? "border-purple-300 dark:border-purple-600 focus:border-purple-500 dark:focus:border-purple-400"
+                  : ""
+              }`}
               rows={1}
             />
           </div>
@@ -958,13 +958,37 @@ export default function ChatPage() {
               sendingMessage ||
               gameState.gameStatus?.status === "waiting_next"
             }
-            className="h-11 w-11 rounded-full bg-purple-500 hover:bg-purple-600 dark:bg-purple-600 dark:hover:bg-purple-700 transition-colors"
+            className={`h-11 w-11 rounded-full transition-colors ${
+              askLudus
+                ? "bg-purple-500 hover:bg-purple-600 dark:bg-purple-600 dark:hover:bg-purple-700"
+                : "bg-blue-500 hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-700"
+            }`}
             size="icon"
           >
             <FaPaperPlane className="h-4 w-4" />
           </Button>
         </div>
       </div>
+
+      {/* アップロードモーダル */}
+      <UploadModal
+        isOpen={uploadModalOpen}
+        onClose={() => setUploadModalOpen(false)}
+        onUploadComplete={handleUploadComplete}
+      />
+
+      {/* 資料表示モーダル */}
+      {selectedDocument && (
+        <DocumentModal
+          isOpen={documentModalOpen}
+          onClose={() => {
+            setDocumentModalOpen(false);
+            setSelectedDocument(null);
+          }}
+          docId={selectedDocument.docId}
+          filename={selectedDocument.filename}
+        />
+      )}
     </div>
   );
 }
@@ -978,11 +1002,17 @@ function MessageItem({
   showAvatar = true,
   showName = true,
   gradingResult,
+  onViewDocument,
+  extractReferencedDocuments,
 }: {
   message: Message;
   showAvatar?: boolean;
   showName?: boolean;
   gradingResult?: GradingResult | { loading: boolean };
+  onViewDocument?: (docId: string, filename: string) => void;
+  extractReferencedDocuments?: (
+    message: Message
+  ) => { docId: string; filename: string }[];
 }) {
   const formatTime = (dateString: string) => {
     const date = new Date(dateString);
@@ -1049,8 +1079,56 @@ function MessageItem({
                 : "bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-600 rounded-bl-md"
             }`}
           >
-            <div className="text-sm leading-relaxed whitespace-pre-wrap">
-              {message.content}
+            <div className="text-sm leading-relaxed prose prose-sm max-w-none prose-slate dark:prose-invert">
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={{
+                  p: ({ children }) => (
+                    <p className="mb-2 last:mb-0">{children}</p>
+                  ),
+                  ul: ({ children }) => (
+                    <ul className="list-disc list-inside mb-2">{children}</ul>
+                  ),
+                  ol: ({ children }) => (
+                    <ol className="list-decimal list-inside mb-2">
+                      {children}
+                    </ol>
+                  ),
+                  li: ({ children }) => <li className="mb-1">{children}</li>,
+                  code: ({ children, className }) => {
+                    const isInline = !className;
+                    return isInline ? (
+                      <code className="bg-slate-200 dark:bg-slate-600 px-1 py-0.5 rounded text-xs">
+                        {children}
+                      </code>
+                    ) : (
+                      <code className="block bg-slate-100 dark:bg-slate-800 p-2 rounded text-xs overflow-x-auto">
+                        {children}
+                      </code>
+                    );
+                  },
+                  blockquote: ({ children }) => (
+                    <blockquote className="border-l-4 border-slate-300 dark:border-slate-600 pl-4 italic mb-2">
+                      {children}
+                    </blockquote>
+                  ),
+                  strong: ({ children }) => (
+                    <strong className="font-semibold">{children}</strong>
+                  ),
+                  em: ({ children }) => <em className="italic">{children}</em>,
+                  h1: ({ children }) => (
+                    <h1 className="text-lg font-bold mb-2">{children}</h1>
+                  ),
+                  h2: ({ children }) => (
+                    <h2 className="text-base font-bold mb-2">{children}</h2>
+                  ),
+                  h3: ({ children }) => (
+                    <h3 className="text-sm font-bold mb-1">{children}</h3>
+                  ),
+                }}
+              >
+                {message.content}
+              </ReactMarkdown>
             </div>
             <div
               className={`text-xs mt-1 ${
@@ -1069,6 +1147,28 @@ function MessageItem({
               }`}
             />
           </div>
+
+          {/* 参考資料ボタン */}
+          {extractReferencedDocuments &&
+            onViewDocument &&
+            (() => {
+              const referencedDocs = extractReferencedDocuments(message);
+              return referencedDocs.length > 0 ? (
+                <div className="mt-2 flex flex-wrap gap-1">
+                  {referencedDocs.map((doc, index) => (
+                    <Button
+                      key={index}
+                      variant="outline"
+                      size="sm"
+                      onClick={() => onViewDocument(doc.docId, doc.filename)}
+                      className="text-xs h-6 px-2 bg-blue-50 hover:bg-blue-100 border-blue-200 text-blue-700 dark:bg-blue-950 dark:hover:bg-blue-900 dark:border-blue-800 dark:text-blue-300"
+                    >
+                      📄 {doc.filename}
+                    </Button>
+                  ))}
+                </div>
+              ) : null;
+            })()}
         </div>
       </div>
 

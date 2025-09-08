@@ -13,6 +13,7 @@ from typing import Dict, List, Optional
 import redis
 from sqlalchemy.orm import Session
 
+from ..database import room_service
 from ..services.collection_manager import manager
 from ..services.llm_service import llm_service
 from ..services.vector_search_service import vector_search_service
@@ -273,7 +274,7 @@ class GameService:
                     "user_id": ai_user_id,
                     "content": content,
                     "created_at": created_at,
-                    "user_name": "🤖 クイズAI",
+                    "user_name": "Ludus",
                     "user_picture": "",
                     "message_type": message_type,
                 },
@@ -289,7 +290,7 @@ class GameService:
                         "id": message_id,
                         "content": content,
                         "user_id": ai_user_id,
-                        "user_name": "🤖 クイズAI",
+                        "user_name": "Ludus",
                         "created_at": created_at,
                         "message_type": message_type,
                     },
@@ -397,6 +398,11 @@ class GameService:
 
             # 20秒のタイマーを開始
             for remaining in range(20, 0, -1):
+                # 最初に現在の残り時間を配信
+                await manager.broadcast(
+                    room_id, {"type": "game_timer", "timeRemaining": remaining}
+                )
+
                 await asyncio.sleep(1)
 
                 # タイマーが有効かチェック（正解が出て別のタイマーが開始された場合は停止）
@@ -419,11 +425,6 @@ class GameService:
                 ):
                     logging.info(f"Question changed, stopping timer {timer_id}")
                     return False
-
-                # タイマー更新を配信
-                await manager.broadcast(
-                    room_id, {"type": "game_timer", "timeRemaining": remaining - 1}
-                )
 
                 # 10秒でヒント送信
                 if remaining == 11:
@@ -464,10 +465,7 @@ class GameService:
             # 問題メッセージを作成
             question_content = f"""🎯 **問題 {question_num}/{total_questions}**
 
-{current_question['question']}
-
-⏰ 制限時間: 20秒
-💡 10秒後にヒントが表示されます"""
+{current_question['question']}"""
 
             # AIメッセージとして送信
             await GameService.send_ai_message(
@@ -584,10 +582,7 @@ class GameService:
             # 問題メッセージを作成
             question_content = f"""🎯 **問題 {question_num}/{total_questions}**
 
-{current_question['question']}
-
-⏰ 制限時間: 20秒
-💡 10秒後にヒントが表示されます"""
+{current_question['question']}"""
 
             # AIメッセージとして送信
             await GameService.send_ai_message(
@@ -858,6 +853,95 @@ class GameService:
             await GameService.next_question(db, game_id)
 
     @staticmethod
+    def get_game_ranking(game_id: str, db: Session = None) -> List[Dict]:
+        """ゲームのランキング情報を取得"""
+        try:
+            # スコア情報を取得
+            scores_data = redis_client.hgetall(f"game:{game_id}:scores")
+            if not scores_data:
+                return []
+
+            # ユーザー情報を取得（ルーム参加者から）
+            game_data = GameService.get_game_info(game_id)
+            if not game_data:
+                return []
+
+            room_id = game_data["room_id"]
+
+            # ルーム参加者情報を取得
+            user_name_map = {}
+            if db:
+                try:
+                    room_members = room_service.get_room_members(db, room_id)
+                    user_name_map = {user.id: user.name for user in room_members}
+                except Exception as e:
+                    logging.error(f"Failed to get room members for {room_id}: {e}")
+
+            ranking = []
+            for user_id, score_json in scores_data.items():
+                try:
+                    score_data = json.loads(score_json)
+                    total_score = score_data.get("total_score", 0)
+                    correct_answers = score_data.get("correct_answers", 0)
+
+                    # ユーザー名を取得（ルーム参加者情報から、なければフォールバック）
+                    user_name = user_name_map.get(user_id, f"ユーザー{user_id[-4:]}")
+
+                    ranking.append(
+                        {
+                            "user_id": user_id,
+                            "user_name": user_name,
+                            "total_score": total_score,
+                            "correct_answers": correct_answers,
+                        }
+                    )
+                except (json.JSONDecodeError, KeyError) as e:
+                    logging.error(f"Failed to parse score data for user {user_id}: {e}")
+                    continue
+
+            # スコア順でソート（降順）
+            ranking.sort(key=lambda x: x["total_score"], reverse=True)
+
+            # 順位を追加
+            for i, user_data in enumerate(ranking):
+                user_data["rank"] = i + 1
+
+            return ranking
+        except Exception as e:
+            logging.error(f"Failed to get game ranking for {game_id}: {e}")
+            return []
+
+    @staticmethod
+    def format_ranking_message(ranking: List[Dict]) -> str:
+        """ランキング情報をメッセージ形式にフォーマット"""
+        if not ranking:
+            return "ランキング情報がありません。"
+
+        message_lines = ["🏆 **最終ランキング**\n"]
+
+        for user_data in ranking:
+            rank = user_data["rank"]
+            user_name = user_data["user_name"]
+            total_score = user_data["total_score"]
+            correct_answers = user_data["correct_answers"]
+
+            # 順位に応じた絵文字
+            if rank == 1:
+                rank_emoji = "🥇"
+            elif rank == 2:
+                rank_emoji = "🥈"
+            elif rank == 3:
+                rank_emoji = "🥉"
+            else:
+                rank_emoji = f"{rank}位"
+
+            message_lines.append(
+                f"{rank_emoji} **{user_name}**: {total_score}点 ({correct_answers}問正解)"
+            )
+
+        return "\n".join(message_lines)
+
+    @staticmethod
     async def next_question(db: Session, game_id: str) -> bool:
         """次の問題に進む"""
         try:
@@ -884,15 +968,31 @@ class GameService:
                     },
                 )
 
+                # ランキング情報を取得してメッセージを送信
+                ranking = GameService.get_game_ranking(game_id, db)
+                ranking_message = GameService.format_ranking_message(ranking)
+
                 # ゲーム終了メッセージを送信
-                await GameService.send_ai_message(
-                    db,
-                    game_id,
-                    "🎊 **ゲーム終了！**\n\nお疲れ様でした！結果をご確認ください。\n新しいゲームを始めたい場合は「新しいゲーム」ボタンを押してください。",
-                )
+                end_message = f"""🎊 **ゲーム終了！**
+
+お疲れ様でした！
+
+{ranking_message}
+
+新しいゲームを始めたい場合は「新しいゲーム」ボタンを押してください。"""
+
+                await GameService.send_ai_message(db, game_id, end_message)
 
                 # ゲーム終了イベントを配信
                 await GameService.broadcast_game_status(game_id)
+
+                # ランキング情報をWebSocketで配信
+                game_data = GameService.get_game_info(game_id)
+                if game_data:
+                    room_id = game_data["room_id"]
+                    await manager.broadcast(
+                        room_id, {"type": "game_ranking", "ranking": ranking}
+                    )
 
                 # ロック解除
                 redis_client.delete(lock_key)

@@ -178,11 +178,20 @@ export function useGameApi(gameId: string | null) {
   const updateGameStateFromWebSocket = useCallback(
     (data: GameEvent, onGradingResult?: (data: GameEvent) => void) => {
       if (data.type === "game_status_update") {
-        setGameState((prev) => ({
-          ...prev,
-          gameStatus: data.gameStatus || null,
-          error: null,
-        }));
+        const newGameStatus = data.gameStatus || null;
+
+        setGameState((prev) => {
+          // ゲーム終了時に即座にタイマーを20にリセット
+          const timeRemaining =
+            newGameStatus?.status === "finished" ? 20 : prev.timeRemaining;
+
+          return {
+            ...prev,
+            gameStatus: newGameStatus,
+            timeRemaining: timeRemaining,
+            error: null,
+          };
+        });
       } else if (data.type === "game_question") {
         setGameState((prev) => ({
           ...prev,

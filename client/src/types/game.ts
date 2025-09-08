@@ -38,19 +38,29 @@ export interface AnswerRequest {
   answer: string;
 }
 
+export interface RankingUser {
+  user_id: string;
+  user_name: string;
+  total_score: number;
+  correct_answers: number;
+  rank: number;
+}
+
 export interface GameEvent {
   type:
     | "game_status_update"
     | "game_question"
     | "game_hint"
     | "game_timer"
-    | "game_grading_result";
+    | "game_grading_result"
+    | "game_ranking";
   gameStatus?: GameStatus;
   question?: Question;
   timeRemaining?: number;
   user_id?: string;
   message_id?: string;
   result?: GradingResult;
+  ranking?: RankingUser[];
 }
 
 export interface GradingResult {
