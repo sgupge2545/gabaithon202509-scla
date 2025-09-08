@@ -10,7 +10,6 @@ import {
   FaPlus,
   FaTrash,
   FaUpload,
-  FaTimes,
 } from "react-icons/fa";
 import type { Message } from "@/types/message";
 import { useAuth } from "@/contexts/AuthContext";
@@ -24,6 +23,7 @@ import { Progress } from "@/components/ui/progress";
 import { useRoomSocket } from "@/hooks/useRoomSocket";
 import { useGameApi } from "@/hooks/useGameApi";
 import type { GradingResult, GameEvent } from "@/types/game";
+import UploadModal from "@/components/UploadModal";
 
 export default function ChatPage() {
   const router = useRouter();
@@ -139,9 +139,10 @@ export default function ChatPage() {
   const [startingGame, setStartingGame] = useState(false);
 
   // 資料選択方式の状態管理
-  const [documentSource, setDocumentSource] = useState<
-    "new" | "existing" | "none"
-  >("existing");
+  const [documentSource, setDocumentSource] = useState<"existing" | "none">(
+    "existing"
+  );
+  const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [userDocuments, setUserDocuments] = useState<
     {
       id: string;
@@ -169,9 +170,7 @@ export default function ChatPage() {
 
     setGameDialogOpen(true);
     // ダイアログを開いたときに既存資料を取得
-    if (documentSource === "existing") {
-      fetchUserDocuments();
-    }
+    fetchUserDocuments();
   };
 
   const fetchUserDocuments = async () => {
@@ -217,6 +216,20 @@ export default function ChatPage() {
 
   const selectAllDocuments = () => {
     setSelectedDocIds(userDocuments.map((doc) => doc.id));
+  };
+
+  const handleUploadComplete = (
+    results: { doc_id?: string; success: boolean }[]
+  ) => {
+    // アップロード完了後、資料一覧を再取得
+    fetchUserDocuments();
+    setUploadModalOpen(false);
+
+    // 成功したアップロードを自動選択
+    const successfulDocIds = results
+      .map((r) => r.doc_id)
+      .filter(Boolean) as string[];
+    setSelectedDocIds((prev) => [...new Set([...prev, ...successfulDocIds])]);
   };
 
   const clearDocumentSelection = () => {
@@ -346,40 +359,6 @@ export default function ChatPage() {
         // ゲーム開始後、ゲーム進行画面に切り替え
         if (result.data?.game_id) {
           setCurrentGameId(result.data.game_id);
-        }
-      } else {
-        // 新規ファイルアップロードの場合（既存の処理）
-        const form = new FormData();
-        for (const file of selectedFiles) {
-          form.append("files", file, file.name);
-        }
-        // 設定情報も送信
-        form.append(
-          "config",
-          JSON.stringify({
-            document_source: "new",
-            problems: problems,
-          })
-        );
-
-        const res = await fetch(`${base}/api/game/start`, {
-          method: "POST",
-          body: form,
-          headers: { Accept: "application/json" },
-          credentials: "include",
-        });
-
-        if (!res.ok) {
-          const text = await res.text();
-          throw new Error(`Game start failed: ${res.status} ${text}`);
-        }
-
-        const data = await res.json();
-        console.log("ゲーム開始API 応答:", data);
-
-        // ゲーム開始後、ゲーム進行画面に切り替え
-        if (data.game_id) {
-          setCurrentGameId(data.game_id);
         }
       }
 
@@ -626,19 +605,7 @@ export default function ChatPage() {
                       }
                       className="mr-2"
                     />
-                    <span className="text-sm">過去の資料から選択</span>
-                  </label>
-                  <label className="flex items-center cursor-pointer">
-                    <input
-                      type="radio"
-                      value="new"
-                      checked={documentSource === "new"}
-                      onChange={(e) =>
-                        setDocumentSource(e.target.value as "new")
-                      }
-                      className="mr-2"
-                    />
-                    <span className="text-sm">新しい資料をアップロード</span>
+                    <span className="text-sm">資料から選択</span>
                   </label>
                   <label className="flex items-center cursor-pointer">
                     <input
@@ -670,10 +637,19 @@ export default function ChatPage() {
                       <>
                         <div className="flex justify-between items-center">
                           <span className="text-xs text-slate-600">
-                            📁 過去にアップロードした資料 (
-                            {userDocuments.length}件)
+                            📁 資料一覧 ({userDocuments.length}件)
                           </span>
                           <div className="flex gap-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setUploadModalOpen(true)}
+                              className="text-xs"
+                            >
+                              <FaUpload className="mr-1" />
+                              新規アップロード
+                            </Button>
                             <Button
                               type="button"
                               variant="outline"
@@ -745,11 +721,18 @@ export default function ChatPage() {
                     ) : (
                       <div className="text-center py-8 text-slate-500">
                         <p className="text-sm">
-                          過去にアップロードした資料がありません
+                          アップロードした資料がありません
                         </p>
-                        <p className="text-xs mt-1">
-                          新しい資料をアップロードしてください
-                        </p>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setUploadModalOpen(true)}
+                          className="mt-2"
+                        >
+                          <FaUpload className="mr-1" />
+                          最初の資料をアップロード
+                        </Button>
                       </div>
                     )}
                   </div>
@@ -774,79 +757,6 @@ export default function ChatPage() {
                       </div>
                     </div>
                   </div>
-                )}
-
-                {/* 新規ファイルアップロード */}
-                {documentSource === "new" && (
-                  <>
-                    <div
-                      className={`rounded-lg border-2 border-dashed p-6 text-center transition-colors ${
-                        dragActive
-                          ? "border-blue-500 bg-blue-50 dark:bg-blue-950/30"
-                          : "border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800/50"
-                      }`}
-                      onDragEnter={onDragEnter}
-                      onDragOver={onDragOver}
-                      onDragLeave={onDragLeave}
-                      onDrop={onDrop}
-                    >
-                      <div className="flex flex-col items-center gap-2">
-                        <FaUpload className="h-6 w-6 text-slate-500" />
-                        <p className="text-sm text-slate-600 dark:text-slate-400">
-                          クリックまたはドラッグ＆ドロップでファイルを追加
-                        </p>
-                        <div className="flex items-center gap-2">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={triggerFileSelect}
-                          >
-                            ファイルを選択
-                          </Button>
-                          <span className="text-xs text-slate-500">
-                            PDF / 画像 など
-                          </span>
-                        </div>
-                      </div>
-                      <input
-                        ref={fileInputRef}
-                        id="doc-files"
-                        type="file"
-                        multiple
-                        className="hidden"
-                        onChange={handleFileChange}
-                      />
-                    </div>
-
-                    {selectedFiles.length > 0 && (
-                      <div className="flex flex-wrap gap-2 pt-2">
-                        {selectedFiles.map((file, idx) => (
-                          <span
-                            key={`${file.name}-${file.size}-${file.lastModified}`}
-                            className="inline-flex items-center gap-1 text-xs pl-2 pr-1 py-1 rounded-full bg-slate-200 dark:bg-slate-700"
-                          >
-                            <span
-                              className="truncate max-w-[160px]"
-                              title={file.name}
-                            >
-                              {file.name}
-                            </span>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              className="h-5 w-5"
-                              onClick={() => removeSelectedFile(idx)}
-                              aria-label="ファイルを削除"
-                            >
-                              <FaTimes className="h-3 w-3" />
-                            </Button>
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </>
                 )}
               </div>
 
@@ -922,8 +832,7 @@ export default function ChatPage() {
                   disabled={
                     startingGame ||
                     (documentSource === "existing" &&
-                      selectedDocIds.length === 0) ||
-                    (documentSource === "new" && selectedFiles.length === 0)
+                      selectedDocIds.length === 0)
                   }
                 >
                   {startingGame ? "開始中..." : "開始"}
@@ -996,6 +905,13 @@ export default function ChatPage() {
           </Button>
         </div>
       </div>
+
+      {/* アップロードモーダル */}
+      <UploadModal
+        isOpen={uploadModalOpen}
+        onClose={() => setUploadModalOpen(false)}
+        onUploadComplete={handleUploadComplete}
+      />
     </div>
   );
 }
