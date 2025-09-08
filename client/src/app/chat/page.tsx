@@ -14,6 +14,7 @@ import { useGameApi } from "@/hooks/useGameApi";
 import { useRoomSocket } from "@/hooks/useRoomSocket";
 import type { GameEvent, GradingResult } from "@/types/game";
 import type { Message } from "@/types/message";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import React, { useEffect, useRef, useState } from "react";
 import {
@@ -926,7 +927,7 @@ export default function ChatPage() {
         </div>
       )}
 
-      <div className="flex-1 overflow-auto p-2 bg-gradient-to-br from-[#533483] to-[#9c74d8]">
+      <div className="flex-1 overflow-auto p-2 bg-gradient-to-br from-[#533483] to-[#9c74d8] relative">
         <div className="space-y-3">
           {messages.map((message, index) => {
             const prevMessage = messages[index - 1];
@@ -951,27 +952,65 @@ export default function ChatPage() {
           })}
           <div ref={messagesEndRef} />
         </div>
+
+        {/* Ludusに聞くボタン（ゲーム中でない場合のみ表示） - 絶対位置 */}
+        {!gameState.gameStatus || gameState.gameStatus.status === "finished" ? (
+          <div className="absolute bottom-4 left-4 group">
+            <div
+              className={`relative transform transition-all duration-300 hover:scale-105 ${
+                askLudus ? "animate-pulse" : ""
+              }`}
+            >
+              {/* グロー効果 */}
+              <div
+                className={`absolute inset-0 rounded-lg blur-sm transition-opacity duration-300 ${
+                  askLudus
+                    ? "bg-purple-400 opacity-75"
+                    : "bg-purple-300 opacity-0 group-hover:opacity-50"
+                }`}
+              ></div>
+
+              {/* メインボタン */}
+              <Button
+                variant={askLudus ? "default" : "outline"}
+                size="sm"
+                onClick={() => setAskLudus(!askLudus)}
+                className={`relative transition-all duration-300 shadow-lg backdrop-blur-sm border-2 ${
+                  askLudus
+                    ? "bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white border-purple-400 shadow-purple-500/50"
+                    : "border-purple-300 text-purple-600 hover:bg-purple-50 dark:border-purple-500 dark:text-purple-400 dark:hover:bg-purple-950/50 bg-white/90 dark:bg-slate-800/90 hover:border-purple-400 dark:hover:border-purple-400"
+                }`}
+              >
+                <div className="flex items-center space-x-2">
+                  <div
+                    className={`transition-transform duration-200 ${
+                      askLudus ? "animate-bounce" : "group-hover:scale-110"
+                    }`}
+                  >
+                    <Image
+                      src="/ludus.png"
+                      alt="Ludus"
+                      width={20}
+                      height={20}
+                      className="rounded-full object-cover"
+                    />
+                  </div>
+                  <span className="font-medium">
+                    {askLudus ? "Ludusに聞く" : "Ludusに聞く"}
+                  </span>
+                </div>
+
+                {/* キラキラエフェクト */}
+                {askLudus && (
+                  <div className="absolute -top-1 -right-1 w-2 h-2 bg-yellow-300 rounded-full animate-ping"></div>
+                )}
+              </Button>
+            </div>
+          </div>
+        ) : null}
       </div>
 
       <div className="p-4 bg-gradient-to-br from-[#0f0f23] to-[#533483] border-t border-slate-200 dark:border-slate-700">
-        {/* Ludusに聞くボタン（ゲーム中でない場合のみ表示） */}
-        {!gameState.gameStatus || gameState.gameStatus.status === "finished" ? (
-          <div className="mb-3">
-            <Button
-              variant={askLudus ? "default" : "outline"}
-              size="sm"
-              onClick={() => setAskLudus(!askLudus)}
-              className={`transition-colors ${
-                askLudus
-                  ? "bg-purple-500 hover:bg-purple-600 text-white"
-                  : "border-purple-300 text-purple-600 hover:bg-purple-50 dark:border-purple-600 dark:text-purple-400 dark:hover:bg-purple-950"
-              }`}
-            >
-              🤖 {askLudus ? "Ludusに聞く（ON）" : "Ludusに聞く"}
-            </Button>
-          </div>
-        ) : null}
-
         <div className="flex items-end space-x-3">
           <div className="flex-1 relative">
             <Textarea
