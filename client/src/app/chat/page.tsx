@@ -437,8 +437,8 @@ export default function ChatPage() {
 
   if (!currentRoom) {
     return (
-      <div className="flex justify-center items-center h-screen flex-col">
-        <h2 className="text-xl font-semibold text-destructive mb-4">
+      <div className="flex justify-center items-center h-screen flex-col bg-gray-700">
+        <h2 className="text-xl font-semibold text-destructive mb-4 text-white">
           {"ルームが見つかりません"}
         </h2>
         <Button onClick={handleBack}>ルーム一覧に戻る</Button>
