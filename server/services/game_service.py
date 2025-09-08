@@ -464,10 +464,7 @@ class GameService:
             # 問題メッセージを作成
             question_content = f"""🎯 **問題 {question_num}/{total_questions}**
 
-{current_question['question']}
-
-⏰ 制限時間: 20秒
-💡 10秒後にヒントが表示されます"""
+{current_question['question']}"""
 
             # AIメッセージとして送信
             await GameService.send_ai_message(
@@ -584,10 +581,7 @@ class GameService:
             # 問題メッセージを作成
             question_content = f"""🎯 **問題 {question_num}/{total_questions}**
 
-{current_question['question']}
-
-⏰ 制限時間: 20秒
-💡 10秒後にヒントが表示されます"""
+{current_question['question']}"""
 
             # AIメッセージとして送信
             await GameService.send_ai_message(
