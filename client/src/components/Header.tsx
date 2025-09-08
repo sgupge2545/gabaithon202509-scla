@@ -2,6 +2,7 @@
 
 import { useAuth } from "@/contexts/AuthContext";
 import Image from "next/image";
+import Link from "next/link";
 import {
   AppBar,
   Toolbar,
@@ -40,7 +41,8 @@ export default function Header() {
       >
         <Typography
           variant="h4"
-          component="h1"
+          component={Link}
+          href="/"
           sx={{
             fontWeight: { xs: 700, sm: 900 },
             fontSize: { xs: "24px", sm: "36px" },
@@ -50,6 +52,11 @@ export default function Header() {
             backgroundClip: "text",
             WebkitBackgroundClip: "text",
             letterSpacing: { xs: 0, sm: "0.1em" },
+            textDecoration: "none",
+            cursor: "pointer",
+            "&:hover": {
+              opacity: 0.8,
+            },
           }}
         >
           Ludus
