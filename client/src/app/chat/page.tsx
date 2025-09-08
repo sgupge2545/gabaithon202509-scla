@@ -556,7 +556,7 @@ export default function ChatPage() {
             ) : (
               <Button
                 onClick={startGame}
-                className="ml-auto"
+                className="ml-auto bg-gradient-to-br from-[#9a15f8] to-[#f86510]"
                 disabled={startingGame}
               >
                 {startingGame ? (
