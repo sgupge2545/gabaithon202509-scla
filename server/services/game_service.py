@@ -397,6 +397,11 @@ class GameService:
 
             # 20秒のタイマーを開始
             for remaining in range(20, 0, -1):
+                # 最初に現在の残り時間を配信
+                await manager.broadcast(
+                    room_id, {"type": "game_timer", "timeRemaining": remaining}
+                )
+
                 await asyncio.sleep(1)
 
                 # タイマーが有効かチェック（正解が出て別のタイマーが開始された場合は停止）
@@ -419,11 +424,6 @@ class GameService:
                 ):
                     logging.info(f"Question changed, stopping timer {timer_id}")
                     return False
-
-                # タイマー更新を配信
-                await manager.broadcast(
-                    room_id, {"type": "game_timer", "timeRemaining": remaining - 1}
-                )
 
                 # 10秒でヒント送信
                 if remaining == 11:
