@@ -206,12 +206,19 @@ def leave_room(db: Session, room_id: str, user_id: str) -> bool:
     )
 
     if not member:
-        return True  # 既に退出済みなら成功扱い
+        return True  # 既に退室済みなら成功扱い
 
     try:
         db.delete(member)
         db.commit()
-        # 退出後、メンバーがいなければルームを削除
+        # 退室ログメッセージ保存
+        from ..services.message_service import create_message
+
+        user = db.query(User).filter(User.id == user_id).first()
+        user_name = user.name if user else ""
+        content = f"{user_name} 退室しました"
+        create_message(db, room_id, user_id, content)
+        # 退室後、メンバーがいなければルームを削除
         remaining = (
             db.query(func.count(RoomMember.user_id))
             .filter(RoomMember.room_id == room_id)
