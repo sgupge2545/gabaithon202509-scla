@@ -1,29 +1,29 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
-import {
-  FaPaperPlane,
-  FaArrowLeft,
-  FaUsers,
-  FaPlay,
-  FaPlus,
-  FaTrash,
-  FaUpload,
-  FaTimes,
-} from "react-icons/fa";
-import type { Message } from "@/types/message";
-import { useAuth } from "@/contexts/AuthContext";
-import { useRoom } from "@/contexts/RoomContext";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { useRoomSocket } from "@/hooks/useRoomSocket";
+import { Textarea } from "@/components/ui/textarea";
+import { useAuth } from "@/contexts/AuthContext";
+import { useRoom } from "@/contexts/RoomContext";
 import { useGameApi } from "@/hooks/useGameApi";
-import type { GradingResult, GameEvent } from "@/types/game";
+import { useRoomSocket } from "@/hooks/useRoomSocket";
+import type { GameEvent, GradingResult } from "@/types/game";
+import type { Message } from "@/types/message";
+import { useRouter } from "next/navigation";
+import React, { useEffect, useRef, useState } from "react";
+import {
+  FaArrowLeft,
+  FaPaperPlane,
+  FaPlay,
+  FaPlus,
+  FaTimes,
+  FaTrash,
+  FaUpload,
+  FaUsers,
+} from "react-icons/fa";
 
 export default function ChatPage() {
   const router = useRouter();
@@ -423,7 +423,7 @@ export default function ChatPage() {
 
   return (
     <div className="h-screen flex flex-col">
-      <Card className="rounded-none border-b border-t-0 border-l-0 border-r-0">
+      <Card className="text-white rounded-none border-b border-t-0 border-l-0 border-r-0 bg-gradient-to-br from-[#0f0f23] to-[#533483]">
         <CardContent className="p-4">
           {/* 基本情報行 */}
           <div className="flex items-center space-x-4 mb-3">
@@ -435,7 +435,7 @@ export default function ChatPage() {
               <div className="flex items-center space-x-2 mt-1">
                 <Badge
                   variant="outline"
-                  className="flex items-center space-x-1"
+                  className="flex items-center space-x-1 text-white"
                 >
                   <FaUsers className="h-3 w-3" />
                   <span>
@@ -479,7 +479,7 @@ export default function ChatPage() {
                 )}
               </div>
             ) : (
-              <Button onClick={startGame} className="ml-auto">
+              <Button onClick={startGame} className="ml-auto bg-gradient-to-br from-[#9306f1] to-[#f4650d]">
                 <FaPlay className="h-4 w-4 mr-2" />
                 ゲーム開始
               </Button>
@@ -885,7 +885,7 @@ export default function ChatPage() {
               </div>
 
               <div className="flex justify-end">
-                <Button
+                <Button className="bg-purple-500"
                   type="button"
                   onClick={confirmStartGame}
                   disabled={
@@ -903,7 +903,7 @@ export default function ChatPage() {
         </div>
       )}
 
-      <div className="flex-1 overflow-auto p-2 bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
+      <div className="flex-1 overflow-auto p-2 bg-gradient-to-br from-[#533483] to-[#9c74d8]">
         <div className="space-y-3">
           {messages.map((message, index) => {
             const prevMessage = messages[index - 1];
@@ -931,7 +931,7 @@ export default function ChatPage() {
         </div>
       </div>
 
-      <div className="p-4 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700">
+      <div className="p-4 bg-gradient-to-br from-[#0f0f23] to-[#533483]">
         <div className="flex items-end space-x-3">
           <div className="flex-1 relative">
             <Textarea
@@ -947,7 +947,7 @@ export default function ChatPage() {
                 sendingMessage ||
                 gameState.gameStatus?.status === "waiting_next"
               }
-              className="min-h-[44px] max-h-32 resize-none rounded-2xl border-slate-300 dark:border-slate-600 focus:border-blue-500 dark:focus:border-blue-400 pr-12"
+              className="bg-white min-h-[44px] max-h-32 resize-none rounded-2xl border-slate-300 dark:border-slate-600 focus:border-blue-500 dark:focus:border-blue-400 pr-12"
               rows={1}
             />
           </div>
@@ -958,7 +958,7 @@ export default function ChatPage() {
               sendingMessage ||
               gameState.gameStatus?.status === "waiting_next"
             }
-            className="h-11 w-11 rounded-full bg-blue-500 hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-700 transition-colors"
+            className="h-11 w-11 rounded-full bg-purple-500 hover:bg-purple-600 dark:bg-purple-600 dark:hover:bg-purple-700 transition-colors"
             size="icon"
           >
             <FaPaperPlane className="h-4 w-4" />
@@ -1045,7 +1045,7 @@ function MessageItem({
           <div
             className={`relative px-4 py-2 rounded-2xl max-w-md break-words ${
               isOwnMessageFunc
-                ? "bg-blue-500 text-white rounded-br-md"
+                ? "bg-purple-500 text-white rounded-br-md"
                 : "bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-600 rounded-bl-md"
             }`}
           >
