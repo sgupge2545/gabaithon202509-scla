@@ -311,13 +311,14 @@ async def join_room(
     try:
         room = room_service.get_room_by_id(db, room_id)
         member_count = len(room.members) if room else 0
-        await manager.broadcast(
-            "__rooms__",
-            {
-                "type": "room_updated",
-                "room": {"id": room_id, "member_count": member_count},
-            },
-        )
+        room_update_data = {
+            "type": "room_updated",
+            "room": {"id": room_id, "member_count": member_count},
+        }
+        # ルーム一覧ページに通知
+        await manager.broadcast("__rooms__", room_update_data)
+        # ルーム内のメンバーにも通知
+        await manager.broadcast(room_id, room_update_data)
     except Exception:
         pass
 
@@ -374,6 +375,21 @@ async def leave_room(
             "leave_room 失敗: room_id=%s user_id=%s", room_id, current_user["id"]
         )
         raise HTTPException(status_code=500, detail="退出に失敗しました")
+
+    # notify room list / room update listeners
+    try:
+        room = room_service.get_room_by_id(db, room_id)
+        member_count = len(room.members) if room else 0
+        room_update_data = {
+            "type": "room_updated",
+            "room": {"id": room_id, "member_count": member_count},
+        }
+        # ルーム一覧ページに通知
+        await manager.broadcast("__rooms__", room_update_data)
+        # ルーム内のメンバーにも通知
+        await manager.broadcast(room_id, room_update_data)
+    except Exception:
+        pass
 
     # 退室メッセージをWebSocketで配信
     try:

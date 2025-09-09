@@ -44,7 +44,7 @@ export default function ChatPage() {
   >({});
 
   const { user } = useAuth();
-  const { leaveRoom, currentRoom, initialized } = useRoom();
+  const { leaveRoom, currentRoom, initialized, setCurrentRoom } = useRoom();
 
   // 初期ロードは RoomContext の復元完了を待つ
 
@@ -71,6 +71,20 @@ export default function ChatPage() {
   // WebSocket + initial load handled by hook
   const { messages: socketMessages, sendMessage: sendMessageHook } =
     useRoomSocket(currentRoom?.id || "", (data) => {
+      // ルーム更新イベントの処理
+      const roomEvent = data as { type: string; room?: { id: string } };
+      if (
+        roomEvent.type === "room_updated" &&
+        roomEvent.room?.id === currentRoom?.id
+      ) {
+        console.log("ルーム更新イベント受信:", roomEvent.room);
+        // 現在のルーム情報を更新
+        if (currentRoom?.id) {
+          setCurrentRoom(currentRoom.id);
+        }
+        return;
+      }
+
       // ゲーム状態更新時にcurrentGameIdも設定
       if (data.type === "game_status_update" && data.gameStatus?.game_id) {
         if (currentGameId !== data.gameStatus.game_id) {

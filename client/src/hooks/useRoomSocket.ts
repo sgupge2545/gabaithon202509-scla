@@ -234,6 +234,13 @@ export function useRoomSocket(
             return;
           }
 
+          // ルーム更新イベントの場合
+          if (data.type === "room_updated") {
+            const handler = onGameEventRef.current;
+            if (handler) handler(data);
+            return;
+          }
+
           // 通常のメッセージの場合
           if (data.type === "message") {
             const payload = data.message as Message;
