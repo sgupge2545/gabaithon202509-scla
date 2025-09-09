@@ -962,8 +962,18 @@ export default function ChatPage() {
         <div className="space-y-3">
           {messages.map((message, index) => {
             const prevMessage = messages[index - 1];
+
+            // アイコン表示条件：前のメッセージがない、ユーザーが違う、または発言時刻の分数が違う
             const showAvatar =
-              !prevMessage || prevMessage.user?.id !== message.user?.id;
+              !prevMessage ||
+              prevMessage.user?.id !== message.user?.id ||
+              Boolean(
+                prevMessage.created_at &&
+                  message.created_at &&
+                  new Date(prevMessage.created_at).getMinutes() !==
+                    new Date(message.created_at).getMinutes()
+              );
+
             const showName = showAvatar && !isOwnMessage(message, user);
 
             // 採点結果を取得（全てのメッセージ対象）
