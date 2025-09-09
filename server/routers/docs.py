@@ -2,6 +2,7 @@
 ドキュメント管理API
 """
 
+import asyncio
 import logging
 import os
 from typing import Dict, List
@@ -13,7 +14,7 @@ from sqlalchemy.orm import Session
 from ..database.database import get_db
 from ..database.models import Doc
 from ..services.doc_service import create_doc_with_chunks, get_user_documents
-from ..services.embedding import create_embeddings
+from ..services.embedding import create_embeddings_async
 from ..services.gcv_ocr import extract_text
 
 router = APIRouter()
@@ -77,6 +78,109 @@ def get_current_user(request: Request) -> Dict:
     return request.session["user"]
 
 
+async def process_single_file(file: UploadFile, user_id: str, db: Session) -> Dict:
+    """単一ファイルを処理する非同期関数"""
+    try:
+        # ファイル内容を読み取り
+        content = await file.read()
+        mime_type = file.content_type or "application/octet-stream"
+
+        # OCRでテキスト抽出
+        texts = extract_text(content, mime_type=mime_type)
+
+        if not texts:
+            return {
+                "filename": file.filename,
+                "success": False,
+                "error": "テキストを抽出できませんでした",
+            }
+
+        # テキストを非同期でembedding
+        embeddings = []
+        if texts:
+            try:
+                embeddings = await create_embeddings_async(texts)
+            except Exception as e:
+                logging.error(f"Embedding failed for {file.filename}: {e}")
+                return {
+                    "filename": file.filename,
+                    "success": False,
+                    "error": f"埋め込み処理に失敗しました: {str(e)}",
+                }
+
+        # DBに保存
+        if texts and embeddings:
+            try:
+                from ..services.embedding import (
+                    _merge_small_pages,
+                    _split_large_chunks,
+                )
+
+                # チャンクテキストを準備
+                merged_texts = _merge_small_pages(texts, min_page_size=200)
+                processed_texts = _split_large_chunks(
+                    merged_texts, max_chunk_size=1500, chunk_overlap=200
+                )
+
+                chunks_data = list(zip(processed_texts, embeddings))
+
+                # ドキュメントとチャンクをDBに保存
+                doc = create_doc_with_chunks(
+                    db=db,
+                    filename=file.filename or "unknown",
+                    mime_type=mime_type,
+                    uploader_id=user_id,
+                    chunks_data=chunks_data,
+                )
+
+                # ファイルを物理的に保存
+                try:
+                    file_path = save_uploaded_file(
+                        content, doc.id, mime_type, file.filename
+                    )
+
+                    # DBのstorage_uriを更新
+                    doc.storage_uri = file_path
+                    db.commit()
+
+                except Exception as e:
+                    logging.error(f"Failed to save file {file.filename}: {e}")
+                    # ファイル保存に失敗してもDBの処理は続行
+
+                logging.info(
+                    f"Successfully uploaded {file.filename} with {len(chunks_data)} chunks"
+                )
+
+                return {
+                    "filename": file.filename,
+                    "success": True,
+                    "doc_id": doc.id,
+                    "chunks_count": len(chunks_data),
+                }
+
+            except Exception as e:
+                logging.error(f"DB save failed for {file.filename}: {e}")
+                return {
+                    "filename": file.filename,
+                    "success": False,
+                    "error": f"データベース保存に失敗しました: {str(e)}",
+                }
+        else:
+            return {
+                "filename": file.filename,
+                "success": False,
+                "error": "テキスト抽出または埋め込み処理に失敗しました",
+            }
+
+    except Exception as e:
+        logging.error(f"Upload failed for {file.filename}: {e}")
+        return {
+            "filename": file.filename,
+            "success": False,
+            "error": f"アップロード処理に失敗しました: {str(e)}",
+        }
+
+
 @router.get("/my-documents")
 async def get_my_documents(
     request: Request,
@@ -115,138 +219,46 @@ async def upload_documents(
     files: List[UploadFile] = File(...),
     db: Session = Depends(get_db),
 ) -> Dict:
-    """ドキュメントをアップロードしてDBに保存"""
+    """ドキュメントをアップロードしてDBに保存（並列処理）"""
     current_user = get_current_user(request)
     user_id = current_user["id"]
 
     if not files:
         raise HTTPException(status_code=400, detail="ファイルが選択されていません")
 
-    results = []
+    logging.info(f"Starting parallel upload of {len(files)} files")
 
-    for file in files:
-        try:
-            # ファイル内容を読み取り
-            content = await file.read()
-            mime_type = file.content_type or "application/octet-stream"
+    # 並列でファイル処理を実行
+    tasks = [process_single_file(file, user_id, db) for file in files]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
 
-            # OCRでテキスト抽出
-            texts = extract_text(content, mime_type=mime_type)
-
-            if not texts:
-                results.append(
-                    {
-                        "filename": file.filename,
-                        "success": False,
-                        "error": "テキストを抽出できませんでした",
-                    }
-                )
-                continue
-
-            # テキストをembedding
-            embeddings = []
-            if texts:
-                try:
-                    embeddings = create_embeddings(texts)
-                except Exception as e:
-                    logging.error(f"Embedding failed for {file.filename}: {e}")
-                    results.append(
-                        {
-                            "filename": file.filename,
-                            "success": False,
-                            "error": f"埋め込み処理に失敗しました: {str(e)}",
-                        }
-                    )
-                    continue
-
-            # DBに保存
-            if texts and embeddings:
-                try:
-                    from ..services.embedding import (
-                        _merge_small_pages,
-                        _split_large_chunks,
-                    )
-
-                    # チャンクテキストを準備
-                    merged_texts = _merge_small_pages(texts, min_page_size=200)
-                    processed_texts = _split_large_chunks(
-                        merged_texts, max_chunk_size=1500, chunk_overlap=200
-                    )
-
-                    chunks_data = list(zip(processed_texts, embeddings))
-
-                    # ドキュメントとチャンクをDBに保存
-                    doc = create_doc_with_chunks(
-                        db=db,
-                        filename=file.filename or "unknown",
-                        mime_type=mime_type,
-                        uploader_id=user_id,
-                        chunks_data=chunks_data,
-                    )
-
-                    # ファイルを物理的に保存
-                    try:
-                        file_path = save_uploaded_file(
-                            content, doc.id, mime_type, file.filename
-                        )
-
-                        # DBのstorage_uriを更新
-                        doc.storage_uri = file_path
-                        db.commit()
-
-                    except Exception as e:
-                        logging.error(f"Failed to save file {file.filename}: {e}")
-                        # ファイル保存に失敗してもDBの処理は続行
-
-                    results.append(
-                        {
-                            "filename": file.filename,
-                            "success": True,
-                            "doc_id": doc.id,
-                            "chunks_count": len(chunks_data),
-                        }
-                    )
-
-                    logging.info(
-                        f"Successfully uploaded {file.filename} with {len(chunks_data)} chunks"
-                    )
-
-                except Exception as e:
-                    logging.error(f"DB save failed for {file.filename}: {e}")
-                    results.append(
-                        {
-                            "filename": file.filename,
-                            "success": False,
-                            "error": f"データベース保存に失敗しました: {str(e)}",
-                        }
-                    )
-            else:
-                results.append(
-                    {
-                        "filename": file.filename,
-                        "success": False,
-                        "error": "テキスト抽出または埋め込み処理に失敗しました",
-                    }
-                )
-
-        except Exception as e:
-            logging.error(f"Upload failed for {file.filename}: {e}")
-            results.append(
+    # 例外が発生した場合の処理
+    processed_results = []
+    for i, result in enumerate(results):
+        if isinstance(result, Exception):
+            logging.error(f"Task failed for file {files[i].filename}: {result}")
+            processed_results.append(
                 {
-                    "filename": file.filename,
+                    "filename": files[i].filename,
                     "success": False,
-                    "error": f"アップロード処理に失敗しました: {str(e)}",
+                    "error": f"処理中にエラーが発生しました: {str(result)}",
                 }
             )
+        else:
+            processed_results.append(result)
 
     # 成功・失敗の統計
-    successful = [r for r in results if r["success"]]
-    failed = [r for r in results if not r["success"]]
+    successful = [r for r in processed_results if r["success"]]
+    failed = [r for r in processed_results if not r["success"]]
+
+    logging.info(
+        f"Upload completed: {len(successful)} successful, {len(failed)} failed"
+    )
 
     return {
-        "results": results,
+        "results": processed_results,
         "summary": {
-            "total": len(results),
+            "total": len(processed_results),
             "successful": len(successful),
             "failed": len(failed),
         },
