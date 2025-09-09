@@ -125,8 +125,10 @@ class AIChatService:
             if db:
                 try:
                     relevant_chunks = await AIChatService.search_relevant_chunks(
-                        db, user_message, top_k=5
+                        db, user_message, top_k=10
                     )
+
+                    logger.info(f"Relevant chunks: {relevant_chunks}")
 
                     if relevant_chunks:
                         context_parts = []
@@ -134,42 +136,28 @@ class AIChatService:
 
                         # デバッグ用：全ての類似度をログ出力
                         logger.info(
-                            f"Similarity scores for query '{user_message[:30]}...': {[(chunk.id[:8], round(sim, 3)) for chunk, sim in relevant_chunks[:3]]}"
+                            f"Similarity scores for query '{user_message[:30]}...': {[(chunk.id[:8], round(sim, 3)) for chunk, sim in relevant_chunks[:5]]}"
                         )
 
                         for chunk, similarity in relevant_chunks:
-                            if (
-                                similarity > 0.5
-                            ):  # 類似度の閾値を上げて、より関連性の高い資料のみを参考にする
-                                # チャンクから関連するドキュメントを取得
-                                doc = (
-                                    db.query(Doc).filter(Doc.id == chunk.doc_id).first()
-                                )
-                                if doc:
-                                    referenced_docs.add(doc.filename)
-                                    # 参考資料の情報を保存
-                                    doc_info = {
-                                        "doc_id": doc.id,
-                                        "filename": doc.filename,
-                                    }
-                                    if doc_info not in referenced_docs_info:
-                                        referenced_docs_info.append(doc_info)
+                            # チャンクから関連するドキュメントを取得
+                            doc = db.query(Doc).filter(Doc.id == chunk.doc_id).first()
+                            if doc:
+                                referenced_docs.add(doc.filename)
+                                # 参考資料の情報を保存
+                                doc_info = {
+                                    "doc_id": doc.id,
+                                    "filename": doc.filename,
+                                }
+                                if doc_info not in referenced_docs_info:
+                                    referenced_docs_info.append(doc_info)
 
-                                    context_parts.append(
-                                        f"[資料: {doc.filename}] {chunk.content[:300]}..."
-                                    )
-                                    logger.info(
-                                        f"Using document '{doc.filename}' with similarity {round(similarity, 3)}"
-                                    )
-                            else:
-                                # 閾値以下の資料はログに記録のみ
-                                doc = (
-                                    db.query(Doc).filter(Doc.id == chunk.doc_id).first()
+                                context_parts.append(
+                                    f"[資料: {doc.filename}] {chunk.content[:300]}..."
                                 )
-                                if doc:
-                                    logger.info(
-                                        f"Skipping document '{doc.filename}' with low similarity {round(similarity, 3)}"
-                                    )
+                                logger.info(
+                                    f"Using document '{doc.filename}' with similarity {round(similarity, 3)}"
+                                )
 
                         if context_parts:
                             relevant_context = "\n\n".join(context_parts)
