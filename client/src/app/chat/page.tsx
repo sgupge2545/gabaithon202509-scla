@@ -1,6 +1,7 @@
 "use client";
 
 import DocumentModal from "@/components/DocumentModal";
+import SuccessAnimation from "@/components/SuccessAnimation";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,6 +13,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useRoom } from "@/contexts/RoomContext";
 import { useGameApi } from "@/hooks/useGameApi";
 import { useRoomSocket } from "@/hooks/useRoomSocket";
+import { useSuccessSound } from "@/hooks/useSuccessSound";
 import type { GameEvent, GradingResult } from "@/types/game";
 import type { Message } from "@/types/message";
 import Image from "next/image";
@@ -43,8 +45,13 @@ export default function ChatPage() {
     Record<string, GradingResult | { loading: boolean }>
   >({});
 
+  // 演出状態管理
+  const [showSuccessAnimation, setShowSuccessAnimation] = useState(false);
+  const [successScore, setSuccessScore] = useState(0);
+
   const { user } = useAuth();
   const { leaveRoom, currentRoom, initialized } = useRoom();
+  const { playSuccessSound } = useSuccessSound();
 
   // 初期ロードは RoomContext の復元完了を待つ
 
@@ -58,19 +65,41 @@ export default function ChatPage() {
   } = useGameApi(currentGameId);
 
   // 採点結果を処理するコールバック
-  const handleGradingResult = (data: GameEvent) => {
+  const handleGradingResult = (data: GameEvent, isRealTime: boolean = true) => {
     if (data.message_id && data.result) {
+      const result = data.result as GradingResult;
+
       // 採点結果を保存
       setGradingResults((prev) => ({
         ...prev,
-        [data.message_id as string]: data.result as GradingResult,
+        [data.message_id as string]: result,
       }));
+
+      // リアルタイムの新しい採点結果で、自分の正解時のみ演出を実行
+      if (isRealTime && result.is_correct && data.user_id === user?.id) {
+        console.log("正解演出を開始:", {
+          score: result.score,
+          userId: data.user_id,
+          isRealTime,
+        });
+        setSuccessScore(result.score);
+        setShowSuccessAnimation(true);
+        playSuccessSound();
+      } else if (result.is_correct && data.user_id === user?.id) {
+        console.log("採点結果復元（演出なし）:", {
+          score: result.score,
+          userId: data.user_id,
+          isRealTime,
+        });
+      }
     }
   };
 
   // WebSocket + initial load handled by hook
   const { messages: socketMessages, sendMessage: sendMessageHook } =
     useRoomSocket(currentRoom?.id || "", (data) => {
+      console.log("WebSocketイベント受信:", data);
+
       // ゲーム状態更新時にcurrentGameIdも設定
       if (data.type === "game_status_update" && data.gameStatus?.game_id) {
         if (currentGameId !== data.gameStatus.game_id) {
@@ -184,12 +213,9 @@ export default function ChatPage() {
   }, [gradingResults]);
 
   const [gameDialogOpen, setGameDialogOpen] = useState(false);
-  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [problems, setProblems] = useState<
     { content: string; count: number }[]
   >([{ content: "", count: 10 }]);
-  const [dragActive, setDragActive] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [startingGame, setStartingGame] = useState(false);
 
   // 資料選択方式の状態管理
@@ -328,58 +354,6 @@ export default function ChatPage() {
     setDocumentModalOpen(true);
   };
 
-  const mergeFiles = (existing: File[], incoming: File[]) => {
-    const map = new Map<string, File>();
-    for (const f of existing) {
-      map.set(`${f.name}:${f.size}:${f.lastModified}`, f);
-    }
-    for (const f of incoming) {
-      map.set(`${f.name}:${f.size}:${f.lastModified}`, f);
-    }
-    return Array.from(map.values());
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files ? Array.from(e.target.files) : [];
-    if (files.length === 0) return;
-    setSelectedFiles((prev) => mergeFiles(prev, files));
-    if (fileInputRef.current) fileInputRef.current.value = "";
-  };
-
-  const triggerFileSelect = () => {
-    fileInputRef.current?.click();
-  };
-
-  const onDragEnter = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDragActive(true);
-  };
-
-  const onDragOver = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-  };
-
-  const onDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDragActive(false);
-  };
-
-  const onDrop = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDragActive(false);
-    const files = e.dataTransfer?.files ? Array.from(e.dataTransfer.files) : [];
-    if (files.length === 0) return;
-    setSelectedFiles((prev) => mergeFiles(prev, files));
-  };
-
-  const removeSelectedFile = (index: number) => {
-    setSelectedFiles((prev) => prev.filter((_, i) => i !== index));
-  };
-
   const addProblemRow = () => {
     setProblems((prev) => [...prev, { content: "", count: 10 }]);
   };
@@ -408,7 +382,6 @@ export default function ChatPage() {
   const confirmStartGame = async () => {
     try {
       setStartingGame(true);
-      const base = process.env.NEXT_PUBLIC_API_BASE_URL || "";
 
       if (documentSource === "existing") {
         // 既存資料を使用する場合
@@ -460,6 +433,11 @@ export default function ChatPage() {
     } finally {
       setStartingGame(false);
     }
+  };
+
+  // 演出終了処理
+  const handleSuccessAnimationComplete = () => {
+    setShowSuccessAnimation(false);
   };
 
   const handleBack = async () => {
@@ -953,6 +931,23 @@ export default function ChatPage() {
           <div ref={messagesEndRef} />
         </div>
 
+        {/* 演出テストボタン（開発用） */}
+        <div className="absolute bottom-20 left-4">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              console.log("演出テスト実行");
+              setSuccessScore(10);
+              setShowSuccessAnimation(true);
+              playSuccessSound();
+            }}
+            className="bg-red-500 text-white"
+          >
+            演出テスト
+          </Button>
+        </div>
+
         {/* Ludusに聞くボタン（ゲーム中でない場合のみ表示） - 絶対位置 */}
         {!gameState.gameStatus || gameState.gameStatus.status === "finished" ? (
           <div className="absolute bottom-4 left-4 group">
@@ -1074,6 +1069,13 @@ export default function ChatPage() {
           filename={selectedDocument.filename}
         />
       )}
+
+      {/* 正解演出 */}
+      <SuccessAnimation
+        isActive={showSuccessAnimation}
+        score={successScore}
+        onComplete={handleSuccessAnimationComplete}
+      />
     </div>
   );
 }

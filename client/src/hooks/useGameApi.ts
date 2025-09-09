@@ -1,14 +1,14 @@
 "use client";
 
-import { useCallback, useState, useEffect } from "react";
 import {
-  GameStatus,
-  Question,
-  GameState,
-  StartQuizRequest,
   AnswerResult,
   GameEvent,
+  GameState,
+  GameStatus,
+  Question,
+  StartQuizRequest,
 } from "@/types/game";
+import { useCallback, useEffect, useState } from "react";
 
 export function useGameApi(gameId: string | null) {
   const [gameState, setGameState] = useState<GameState>({
@@ -176,7 +176,10 @@ export function useGameApi(gameId: string | null) {
 
   // WebSocketでゲーム状態を更新
   const updateGameStateFromWebSocket = useCallback(
-    (data: GameEvent, onGradingResult?: (data: GameEvent) => void) => {
+    (
+      data: GameEvent,
+      onGradingResult?: (data: GameEvent, isRealTime?: boolean) => void
+    ) => {
       if (data.type === "game_status_update") {
         const newGameStatus = data.gameStatus || null;
 
@@ -213,7 +216,12 @@ export function useGameApi(gameId: string | null) {
           error: null,
         }));
       } else if (data.type === "game_grading_result" && onGradingResult) {
-        onGradingResult(data);
+        onGradingResult(data, true); // リアルタイム
+      } else if (
+        data.type === "game_grading_result_restore" &&
+        onGradingResult
+      ) {
+        onGradingResult(data, false); // 復元時（演出なし）
       }
     },
     []

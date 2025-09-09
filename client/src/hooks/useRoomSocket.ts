@@ -38,13 +38,13 @@ export function useRoomSocket(
         setMessages(ordered);
         messagesRef.current = ordered;
 
-        // メッセージに含まれる採点結果をコールバックで通知
+        // メッセージに含まれる採点結果をコールバックで通知（演出なし）
         const handler = onGameEventRef.current;
         if (handler) {
           for (const message of ordered) {
             if (message.grading_result) {
               handler({
-                type: "game_grading_result",
+                type: "game_grading_result_restore", // 復元時は別のタイプを使用
                 user_id: message.user_id,
                 message_id: message.id,
                 result: message.grading_result,

@@ -53,6 +53,7 @@ export interface GameEvent {
     | "game_hint"
     | "game_timer"
     | "game_grading_result"
+    | "game_grading_result_restore"
     | "game_ranking";
   gameStatus?: GameStatus;
   question?: Question;
@@ -68,6 +69,7 @@ export interface GradingResult {
   score: number;
   feedback: string;
   user_name: string;
+  user_id?: string;
 }
 
 export interface AnswerResult {
