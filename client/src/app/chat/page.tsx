@@ -952,15 +952,13 @@ export default function ChatPage() {
           })}
           <div ref={messagesEndRef} />
         </div>
+      </div>
 
-        {/* Ludusに聞くボタン（ゲーム中でない場合のみ表示） - 絶対位置 */}
+      <div className="p-4 bg-gradient-to-br from-[#0f0f23] to-[#533483] border-t border-slate-200 dark:border-slate-700 relative">
+        {/* Ludusに聞くボタン（ゲーム中でない場合のみ表示） */}
         {!gameState.gameStatus || gameState.gameStatus.status === "finished" ? (
-          <div className="absolute bottom-4 left-4 group">
-            <div
-              className={`relative transform transition-all duration-300 hover:scale-105 ${
-                askLudus ? "animate-pulse" : ""
-              }`}
-            >
+          <div className="absolute bottom-full left-4 mb-2 group">
+            <div className="relative transform transition-all duration-300 hover:scale-105">
               {/* グロー効果 */}
               <div
                 className={`absolute inset-0 rounded-lg blur-sm transition-opacity duration-300 ${
@@ -1008,9 +1006,7 @@ export default function ChatPage() {
             </div>
           </div>
         ) : null}
-      </div>
 
-      <div className="p-4 bg-gradient-to-br from-[#0f0f23] to-[#533483] border-t border-slate-200 dark:border-slate-700">
         <div className="flex items-end space-x-3">
           <div className="flex-1 relative">
             <Textarea
