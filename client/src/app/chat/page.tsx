@@ -1165,7 +1165,9 @@ function MessageItem({
         >
           {showAvatar && message.user ? (
             <Avatar className="w-8 h-8">
-              {message.user.name === "Ludus" ? (
+              {message.user.name === "Ludus" ||
+              message.user.id === "ai_system" ||
+              message.user.id === "system" ? (
                 <AvatarImage src="/ludus.png" />
               ) : message.user.picture ? (
                 <AvatarImage src={message.user.picture} />

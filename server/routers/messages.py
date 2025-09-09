@@ -226,7 +226,15 @@ async def get_messages(
             if data:
                 name = data.get("user_name", "")
                 picture = data.get("user_picture", "")
-                if name or picture or message.user_id:
+
+                # Ludusメッセージの特別処理
+                if message.user_id in ["ai_system", "system"] and name == "Ludus":
+                    user_info = {
+                        "id": message.user_id,
+                        "name": "Ludus",
+                        "picture": None,
+                    }
+                elif name or picture or message.user_id:
                     user_info = {
                         "id": message.user_id,
                         "name": name,
@@ -333,11 +341,20 @@ async def send_message(
         if data:
             name = data.get("user_name", "")
             picture = data.get("user_picture", "")
-            user_info = {
-                "id": message.user_id,
-                "name": name,
-                "picture": picture or None,
-            }
+
+            # Ludusメッセージの特別処理
+            if message.user_id in ["ai_system", "system"] and name == "Ludus":
+                user_info = {
+                    "id": message.user_id,
+                    "name": "Ludus",
+                    "picture": None,
+                }
+            else:
+                user_info = {
+                    "id": message.user_id,
+                    "name": name,
+                    "picture": picture or None,
+                }
     except Exception:
         pass
 

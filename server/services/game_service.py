@@ -290,9 +290,13 @@ class GameService:
                         "id": message_id,
                         "content": content,
                         "user_id": ai_user_id,
-                        "user_name": "Ludus",
                         "created_at": created_at,
                         "message_type": message_type,
+                        "user": {
+                            "id": ai_user_id,
+                            "name": "Ludus",
+                            "picture": None,
+                        },
                     },
                 },
             )
