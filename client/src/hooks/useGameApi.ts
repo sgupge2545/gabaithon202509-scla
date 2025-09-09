@@ -1,14 +1,14 @@
 "use client";
 
-import { useCallback, useState, useEffect } from "react";
 import {
-  GameStatus,
-  Question,
-  GameState,
-  StartQuizRequest,
   AnswerResult,
   GameEvent,
+  GameState,
+  GameStatus,
+  Question,
+  StartQuizRequest,
 } from "@/types/game";
+import { useCallback, useEffect, useState } from "react";
 
 export function useGameApi(gameId: string | null) {
   const [gameState, setGameState] = useState<GameState>({
@@ -227,11 +227,18 @@ export function useGameApi(gameId: string | null) {
 
     // 初回のみ状態を取得（以降はWebSocketで更新）
     const fetchInitialStatus = async () => {
-      await fetchGameStatus();
+      console.log("ゲーム初期状態取得開始:", gameId);
+      const statusResult = await fetchGameStatus();
+
+      // ゲーム中の場合は現在の問題も取得
+      if (statusResult.data?.status === "playing") {
+        console.log("ゲーム中のため現在の問題を取得");
+        await fetchCurrentQuestion();
+      }
     };
 
     fetchInitialStatus();
-  }, [gameId, fetchGameStatus]);
+  }, [gameId, fetchGameStatus, fetchCurrentQuestion]);
 
   return {
     gameState,

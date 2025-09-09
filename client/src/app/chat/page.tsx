@@ -74,6 +74,7 @@ export default function ChatPage() {
       // ゲーム状態更新時にcurrentGameIdも設定
       if (data.type === "game_status_update" && data.gameStatus?.game_id) {
         if (currentGameId !== data.gameStatus.game_id) {
+          console.log("ゲームID設定:", data.gameStatus.game_id);
           setCurrentGameId(data.gameStatus.game_id);
         }
 
@@ -521,7 +522,7 @@ export default function ChatPage() {
             </div>
             {gameState.gameStatus ? (
               <div className="ml-auto flex items-center space-x-4">
-                {gameState.gameStatus.status === "ready" && (
+                {gameState.gameStatus.status === "ready" && !startingGame && (
                   <Button
                     onClick={startChatGame}
                     size="sm"
@@ -533,8 +534,13 @@ export default function ChatPage() {
                 )}
                 {gameState.gameStatus.status === "generating" && (
                   <div className="flex items-center space-x-2">
-                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-500 border-t-transparent"></div>
-                    <Badge variant="outline">問題生成中...</Badge>
+                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                    <Badge
+                      variant="outline"
+                      className="text-white border-white"
+                    >
+                      問題生成中...
+                    </Badge>
                   </div>
                 )}
                 {gameState.gameStatus.status === "finished" && (
@@ -546,7 +552,7 @@ export default function ChatPage() {
                   >
                     {startingGame ? (
                       <>
-                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-500 border-t-transparent mr-2"></div>
+                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2"></div>
                         開始中...
                       </>
                     ) : (
@@ -557,6 +563,26 @@ export default function ChatPage() {
                     )}
                   </Button>
                 )}
+                {(gameState.gameStatus.status === "ready" ||
+                  gameState.gameStatus.status === "generating") &&
+                  startingGame && (
+                    <div className="flex items-center space-x-2">
+                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                      <Badge
+                        variant="outline"
+                        className="text-white border-white"
+                      >
+                        ゲーム開始中...
+                      </Badge>
+                    </div>
+                  )}
+              </div>
+            ) : startingGame ? (
+              <div className="flex items-center space-x-2">
+                <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                <Badge variant="outline" className="text-white border-white">
+                  ゲーム開始中...
+                </Badge>
               </div>
             ) : (
               <Button
@@ -564,17 +590,8 @@ export default function ChatPage() {
                 className="ml-auto bg-gradient-to-br from-[#9a15f8] to-[#f86510]"
                 disabled={startingGame}
               >
-                {startingGame ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2"></div>
-                    開始中...
-                  </>
-                ) : (
-                  <>
-                    <FaPlay className="h-4 w-4 mr-2" />
-                    ゲーム開始
-                  </>
-                )}
+                <FaPlay className="h-4 w-4 mr-2" />
+                ゲーム開始
               </Button>
             )}
           </div>
