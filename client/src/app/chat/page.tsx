@@ -29,6 +29,12 @@ import {
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
+// UTC時間を日本時間に変換するヘルパー関数
+const toJapanTime = (dateString: string): Date => {
+  const date = new Date(dateString);
+  return new Date(date.getTime() + 9 * 60 * 60 * 1000);
+};
+
 export default function ChatPage() {
   const router = useRouter();
   const [messages, setMessages] = useState<Message[]>([]);
@@ -806,7 +812,7 @@ export default function ChatPage() {
                                   </div>
                                   <div className="text-xs text-slate-500 mt-1">
                                     📅{" "}
-                                    {new Date(
+                                    {toJapanTime(
                                       doc.created_at
                                     ).toLocaleDateString("ja-JP")}{" "}
                                     | 📊 {doc.chunk_count}チャンク
@@ -970,8 +976,8 @@ export default function ChatPage() {
               Boolean(
                 prevMessage.created_at &&
                   message.created_at &&
-                  new Date(prevMessage.created_at).getMinutes() !==
-                    new Date(message.created_at).getMinutes()
+                  toJapanTime(prevMessage.created_at).getMinutes() !==
+                    toJapanTime(message.created_at).getMinutes()
               );
 
             const showName = showAvatar && !isOwnMessage(message, user);
@@ -1137,8 +1143,7 @@ function MessageItem({
   ) => { docId: string; filename: string }[];
 }) {
   const formatTime = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleTimeString("ja-JP", {
+    return toJapanTime(dateString).toLocaleTimeString("ja-JP", {
       hour: "2-digit",
       minute: "2-digit",
     });
