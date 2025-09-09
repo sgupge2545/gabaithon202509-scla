@@ -1,32 +1,32 @@
 "use client";
 
-import React, { useState } from "react";
+import Header from "@/components/Header";
+import { useRoom } from "@/contexts/RoomContext";
+import { CreateRoomData, Room } from "@/types/room";
 import ChatIcon from "@mui/icons-material/Chat";
 import {
   Box,
+  Button,
   Card,
   CardContent,
-  Typography,
-  Button,
   Chip,
-  Stack,
   Dialog,
-  DialogTitle,
-  DialogContent,
   DialogActions,
-  TextField,
+  DialogContent,
+  DialogTitle,
   FormControl,
   InputLabel,
-  Select,
   MenuItem,
+  Select,
+  Stack,
+  TextField,
+  Typography,
   useMediaQuery,
   useTheme,
 } from "@mui/material";
-import { FaPlus, FaUsers, FaLock } from "react-icons/fa";
-import { useRoom } from "@/contexts/RoomContext";
-import { Room, CreateRoomData } from "@/types/room";
 import { useRouter } from "next/navigation";
-import Header from "@/components/Header";
+import { useState } from "react";
+import { FaLock, FaPlus, FaUsers } from "react-icons/fa";
 
 export default function RoomsPage() {
   const { publicRooms, createRoom, joinRoom, setCurrentRoom } = useRoom();
@@ -49,7 +49,7 @@ export default function RoomsPage() {
     if (!newRoom.title.trim()) {
       alert("ルーム名を入力してください");
       return;
-    }  
+    }
 
     // パスコード付きルームの場合、パスコードが入力されているかチェック
     if (newRoom.visibility === "passcode" && !newRoom.passcode?.trim()) {
@@ -163,7 +163,7 @@ export default function RoomsPage() {
               letterSpacing: { xs: 0, sm: "0.1em" },
             }}
           >
-            チャットルーム
+            ルーム一覧
           </Typography>
         </Stack>
         <Button
