@@ -274,11 +274,16 @@ class LLMService:
 - 助詞の有無
 - 大文字小文字の違い
 
+【重要な制約】
+- フィードバックには絶対に正解や答えを含めないでください
+- 正解がわかるような具体的なヒントも避けてください
+- 採点結果と励ましのコメントのみを提供してください
+
 以下のJSON形式で出力してください:
 {{
   "score": 100,
   "is_correct": true,
-  "feedback": "正解です！詳細な説明...",
+  "feedback": "正解です！よくできました。",
   "reasoning": "採点理由の説明"
 }}
         """
@@ -338,7 +343,9 @@ class LLMService:
         return {
             "score": score,
             "is_correct": is_correct,
-            "feedback": "正解です！" if is_correct else "不正解です。",
+            "feedback": "正解です！よくできました。"
+            if is_correct
+            else "残念！次回頑張りましょう。",
             "reasoning": "簡易採点による結果",
         }
 
