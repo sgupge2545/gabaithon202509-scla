@@ -1,67 +1,24 @@
 """
-LLMサービス - Gemini + LangChainを使用した問題生成と採点
+LLMサービス - Ollama + requestsを使用した問題生成と採点
 """
 
+import json
 import logging
-import os
+import re
 from typing import Dict, List
 
-from langchain_core.output_parsers import JsonOutputParser
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_google_genai import ChatGoogleGenerativeAI
-from pydantic import BaseModel, Field
+from .ollama_service import ollama_service
 
-# 環境変数からAPIキーを取得
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-if not GEMINI_API_KEY:
-    logging.warning("GEMINI_API_KEY not found in environment variables")
-
-# Geminiモデルを初期化
-llm = (
-    ChatGoogleGenerativeAI(
-        model="gemini-1.5-flash",
-        google_api_key=GEMINI_API_KEY,
-        temperature=0.7,
-        max_tokens=2048,
-    )
-    if GEMINI_API_KEY
-    else None
-)
-
-
-class QuizQuestion(BaseModel):
-    """クイズ問題の構造"""
-
-    question: str = Field(description="問題文")
-    reference_answer: str = Field(description="正解例")
-    hint: str = Field(description="ヒント")
-    explanation: str = Field(description="正解の解説")
-    context: str = Field(description="問題の背景情報")
-    source_chunk: str = Field(description="参照元のチャンク")
-
-
-class QuizQuestions(BaseModel):
-    """複数のクイズ問題"""
-
-    questions: List[QuizQuestion] = Field(description="生成された問題のリスト")
-
-
-class GradingResult(BaseModel):
-    """採点結果"""
-
-    score: int = Field(description="得点（0-100）")
-    is_correct: bool = Field(description="正解かどうか")
-    feedback: str = Field(description="フィードバックメッセージ")
-    reasoning: str = Field(description="採点理由")
+logger = logging.getLogger(__name__)
 
 
 class LLMService:
     """LLMサービスクラス"""
 
     def __init__(self):
-        self.llm = llm
-        if not self.llm:
-            logging.error("LLM not initialized - check GEMINI_API_KEY")
+        self.ollama = ollama_service
+        if not self.ollama:
+            logging.error("Ollama service not available")
 
     async def generate_questions(
         self,
@@ -82,8 +39,8 @@ class LLMService:
         Returns:
             生成された問題のリスト
         """
-        if not self.llm:
-            raise Exception("LLM not available - check GEMINI_API_KEY")
+        if not self.ollama:
+            raise Exception("Ollama service not available")
 
         # チャンク数を制限
         selected_chunks = context_chunks[:max_chunks]
@@ -91,10 +48,8 @@ class LLMService:
             [f"[チャンク{i+1}]\n{chunk}" for i, chunk in enumerate(selected_chunks)]
         )
 
-        # プロンプトテンプレートを作成
-        prompt = ChatPromptTemplate.from_template(
-            """
-あなたは教育的なクイズ問題を作成する専門家です。
+        # プロンプトを構築
+        prompt = f"""あなたは教育的なクイズ問題を作成する専門家です。
 
 以下の資料から「{problem_type}」を{count}問作成してください。
 
@@ -121,25 +76,20 @@ class LLMService:
       "source_chunk": "参照元のチャンク（最初の50文字程度）"
     }}
   ]
-}}
-        """
-        )
-
-        # JSON出力パーサーを設定
-        parser = JsonOutputParser(pydantic_object=QuizQuestions)
-
-        # チェーンを作成
-        chain = prompt | self.llm | parser
+}}"""
 
         try:
-            # 問題生成を実行
-            result = await chain.ainvoke(
-                {
-                    "problem_type": problem_type,
-                    "count": count,
-                    "context_text": context_text,
-                }
-            )
+            # Ollamaを使用して問題生成を実行
+            response_text = await self.ollama.generate_response(prompt)
+
+            if not response_text:
+                raise Exception("Ollama returned empty response")
+
+            # JSONレスポンスをパース
+            result = self._parse_json_response(response_text)
+
+            if not result or "questions" not in result:
+                raise Exception("Invalid JSON response format")
 
             logging.info(
                 f"Generated {len(result.get('questions', []))} questions for type: {problem_type}"
@@ -168,13 +118,11 @@ class LLMService:
         Returns:
             生成された問題のリスト
         """
-        if not self.llm:
-            raise Exception("LLM not available - check GEMINI_API_KEY")
+        if not self.ollama:
+            raise Exception("Ollama service not available")
 
-        # プロンプトテンプレートを作成
-        prompt = ChatPromptTemplate.from_template(
-            """
-あなたは教育的なクイズ問題を作成する専門家です。
+        # プロンプトを構築
+        prompt = f"""あなたは教育的なクイズ問題を作成する専門家です。
 
 「{problem_type}」について、一般的な知識から{count}問作成してください。
 
@@ -199,22 +147,20 @@ class LLMService:
       "source_chunk": "一般知識"
     }}
   ]
-}}
-        """
-        )
-
-        # JSON出力パーサーを設定
-        parser = JsonOutputParser(pydantic_object=QuizQuestions)
-        chain = prompt | self.llm | parser
+}}"""
 
         try:
-            # LLMを実行
-            result = await chain.ainvoke(
-                {
-                    "problem_type": problem_type,
-                    "count": count,
-                }
-            )
+            # Ollamaを使用して問題生成を実行
+            response_text = await self.ollama.generate_response(prompt)
+
+            if not response_text:
+                raise Exception("Ollama returned empty response")
+
+            # JSONレスポンスをパース
+            result = self._parse_json_response(response_text)
+
+            if not result or "questions" not in result:
+                raise Exception("Invalid JSON response format")
 
             questions = result.get("questions", [])
 
@@ -246,13 +192,11 @@ class LLMService:
         Returns:
             採点結果
         """
-        if not self.llm:
-            raise Exception("LLM not available - check GEMINI_API_KEY")
+        if not self.ollama:
+            raise Exception("Ollama service not available")
 
-        # プロンプトテンプレートを作成
-        prompt = ChatPromptTemplate.from_template(
-            """
-あなたは公平で正確なクイズ採点者です。
+        # プロンプトを構築
+        prompt = f"""あなたは公平で正確なクイズ採点者です。
 
 問題: {question}
 正解例: {reference_answer}
@@ -285,26 +229,20 @@ class LLMService:
   "is_correct": true,
   "feedback": "正解です！よくできました。",
   "reasoning": "採点理由の説明"
-}}
-        """
-        )
-
-        # JSON出力パーサーを設定
-        parser = JsonOutputParser(pydantic_object=GradingResult)
-
-        # チェーンを作成
-        chain = prompt | self.llm | parser
+}}"""
 
         try:
-            # 採点を実行
-            result = await chain.ainvoke(
-                {
-                    "question": question,
-                    "reference_answer": reference_answer,
-                    "user_answer": user_answer,
-                    "context": context,
-                }
-            )
+            # Ollamaを使用して採点を実行
+            response_text = await self.ollama.generate_response(prompt)
+
+            if not response_text:
+                raise Exception("Ollama returned empty response")
+
+            # JSONレスポンスをパース
+            result = self._parse_json_response(response_text)
+
+            if not result:
+                raise Exception("Invalid JSON response format")
 
             logging.info(
                 f"Graded answer: {user_answer} -> {result.get('score', 0)} points"
@@ -315,6 +253,41 @@ class LLMService:
             logging.error(f"Answer grading failed: {e}")
             # フォールバック: 簡単な採点
             return self._grade_answer_fallback(reference_answer, user_answer)
+
+    def _parse_json_response(self, response_text: str) -> Dict:
+        """
+        OllamaからのJSONレスポンスをパース
+
+        Args:
+            response_text: Ollamaからの生のレスポンステキスト
+
+        Returns:
+            パースされたJSONオブジェクト
+        """
+        try:
+            # JSONブロックを抽出（```json ... ``` の形式も対応）
+            json_match = re.search(r"```json\s*(.*?)\s*```", response_text, re.DOTALL)
+            if json_match:
+                json_text = json_match.group(1)
+            else:
+                # JSONブロックがない場合は、{ から } までを抽出
+                start_idx = response_text.find("{")
+                end_idx = response_text.rfind("}")
+                if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
+                    json_text = response_text[start_idx : end_idx + 1]
+                else:
+                    json_text = response_text
+
+            # JSONをパース
+            return json.loads(json_text)
+
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse JSON response: {e}")
+            logger.debug(f"Raw response: {response_text[:500]}...")
+            return {}
+        except Exception as e:
+            logger.error(f"Error parsing response: {e}")
+            return {}
 
     def _generate_fallback_questions(
         self, problem_type: str, count: int, chunks: List[str]

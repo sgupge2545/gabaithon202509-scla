@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from ..database.models import Doc, DocChunk, User
 from ..services.doc_service import deserialize_vector
 from ..services.embedding import create_single_embedding
-from ..services.llm_service import llm
+from ..services.ollama_service import ollama_service
 
 logger = logging.getLogger(__name__)
 
@@ -117,7 +117,7 @@ class AIChatService:
         referenced_docs_info = []  # 参考資料の情報を格納
 
         try:
-            if not llm:
+            if not ollama_service:
                 return "申し訳ありません、現在AIサービスが利用できません 😅", []
 
             # RAG: 関連する資料を検索
@@ -207,16 +207,11 @@ class AIChatService:
 
 返信:"""
 
-            # LLMを直接使用してAI応答を生成
-            response = await llm.ainvoke(prompt)
-
-            # レスポンスからテキストを抽出
-            response_text = (
-                response.content if hasattr(response, "content") else str(response)
-            )
+            # Ollamaサービスを使用してAI応答を生成
+            response_text = await ollama_service.generate_response(prompt)
 
             return (
-                response_text.strip() if response_text else None,
+                response_text if response_text else None,
                 referenced_docs_info,
             )
 
